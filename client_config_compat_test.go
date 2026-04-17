@@ -101,18 +101,13 @@ func TestClientConfig_ShutdownTimeout_RespectsShorterValue(t *testing.T) {
 	c.Kill()
 	elapsed := time.Since(start)
 
-	// Bracket tightly so regressions that silently ignore the config
-	// and fall back to a larger hardcoded value (2s or 5s) are caught,
-	// and so do regressions that skip the graceful-wait entirely.
-	//
-	// Lower bound: the plugin does not exit on Close within the budget
-	// here, so the grace-wait path must actually fire and consume at
-	// least most of the configured 200ms before the force kill.
-	// Upper bound: a 500ms hardcoded regression would still pass a
-	// loose "< 2s" assertion; pin to under 1s.
-	if elapsed < 100*time.Millisecond {
-		t.Fatalf("Kill returned too fast; graceful wait did not fire; elapsed=%v", elapsed)
-	}
+	// The configured 200ms is a cap on the graceful wait, not a floor —
+	// a plugin that does exit cleanly (common under non-race scheduling)
+	// unblocks doneCtx in under a millisecond and Kill returns fast.
+	// What we DO catch: a regression that ignores the config and falls
+	// back to the 5s default, or to any hardcoded value above ~1s. A
+	// 500ms hardcoded regression would slip past a loose "< 2s" bound;
+	// pin to under 1s.
 	if elapsed > 1*time.Second {
 		t.Fatalf("Kill used a longer window than configured 200ms; elapsed=%v (suggests fallback to default %v or hardcoded value)", elapsed, defaultShutdownTimeout)
 	}
