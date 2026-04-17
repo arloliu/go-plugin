@@ -87,11 +87,12 @@ func newGRPCClient(doneCtx context.Context, c *Client) (*GRPCClient, error) {
 	go stdioClient.Run(c.config.SyncStdout, c.config.SyncStderr)
 
 	cl := &GRPCClient{
-		Conn:       conn,
-		Plugins:    c.config.Plugins,
-		doneCtx:    doneCtx,
-		broker:     broker,
-		controller: plugin.NewGRPCControllerClient(conn),
+		Conn:        conn,
+		Plugins:     c.config.Plugins,
+		doneCtx:     doneCtx,
+		broker:      broker,
+		controller:  plugin.NewGRPCControllerClient(conn),
+		pingTimeout: c.config.PingTimeout,
 	}
 
 	return cl, nil
@@ -106,6 +107,10 @@ type GRPCClient struct {
 	broker  *GRPCBroker
 
 	controller plugin.GRPCControllerClient
+
+	// pingTimeout bounds Ping() and the Close-time Shutdown RPC. Zero means
+	// fall back to defaultPingTimeout.
+	pingTimeout time.Duration
 }
 
 // ClientProtocol impl.
@@ -117,10 +122,17 @@ func (c *GRPCClient) Close() error {
 	// We do, however, bound the call with a timeout so a wedged plugin
 	// cannot hang the caller indefinitely — c.doneCtx alone was unbounded
 	// until plugin exit.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultPingTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), c.effectivePingTimeout())
 	defer cancel()
 	_, _ = c.controller.Shutdown(ctx, &plugin.Empty{})
 	return c.Conn.Close()
+}
+
+func (c *GRPCClient) effectivePingTimeout() time.Duration {
+	if c.pingTimeout > 0 {
+		return c.pingTimeout
+	}
+	return defaultPingTimeout
 }
 
 // ClientProtocol impl.
@@ -141,7 +153,7 @@ func (c *GRPCClient) Dispense(name string) (interface{}, error) {
 // ClientProtocol impl.
 func (c *GRPCClient) Ping() error {
 	client := grpc_health_v1.NewHealthClient(c.Conn)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultPingTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), c.effectivePingTimeout())
 	defer cancel()
 	_, err := client.Check(ctx, &grpc_health_v1.HealthCheckRequest{
 		Service: GRPCServiceName,

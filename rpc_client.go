@@ -23,6 +23,10 @@ type RPCClient struct {
 
 	// These are the streams used for the various stdout/err overrides
 	stdout, stderr net.Conn
+
+	// pingTimeout bounds how long Ping() waits before returning
+	// ErrPingTimeout. Zero means fall back to defaultPingTimeout.
+	pingTimeout time.Duration
 }
 
 // newRPCClient creates a new RPCClient. The Client argument is expected
@@ -48,6 +52,7 @@ func newRPCClient(c *Client) (*RPCClient, error) {
 		_ = conn.Close()
 		return nil, err
 	}
+	result.pingTimeout = c.config.PingTimeout
 
 	// Begin the stream syncing so that stdin, out, err work properly
 	err = result.SyncStreams(
@@ -193,7 +198,11 @@ func (c *RPCClient) Ping() error {
 	done := make(chan *rpc.Call, 1)
 	call := c.control.Go("Control.Ping", true, &empty, done)
 
-	t := time.NewTimer(defaultPingTimeout)
+	timeout := c.pingTimeout
+	if timeout <= 0 {
+		timeout = defaultPingTimeout
+	}
+	t := time.NewTimer(timeout)
 	defer t.Stop()
 
 	select {

@@ -280,6 +280,12 @@ type ClientConfig struct {
 	// that are created. Not normally required. Not supported on Windows.
 	UnixSocketConfig *UnixSocketConfig
 
+	// PingTimeout bounds how long ClientProtocol.Ping() waits before
+	// reporting the plugin unresponsive. If zero, defaults to 10s. Set a
+	// shorter value in latency-sensitive supervisors and a longer value if
+	// plugins have bursty GC pauses that briefly exceed the default.
+	PingTimeout time.Duration
+
 	// DisableProcessGroupKill reverts the plugin subprocess lifecycle to the
 	// pre-fix behaviour of signalling only the plugin PID on Kill (instead
 	// of its whole POSIX process group). Set this if your plugin spawns TTY-
