@@ -115,6 +115,11 @@ type Client struct {
 
 	grpcMuxerOnce sync.Once
 	grpcMuxer     *grpcmux.GRPCClientMuxer
+	// grpcMuxerErr caches the error from the first (and only) attempt to
+	// create grpcMuxer. Without caching, every caller after the first
+	// received (nil, nil) even when initialization had failed, which
+	// silently reverted multiplexed brokering to the non-muxed path.
+	grpcMuxerErr error
 }
 
 // NegotiatedVersion returns the protocol version negotiated with the server.
@@ -1163,12 +1168,11 @@ func (c *Client) getGRPCMuxer(addr net.Addr) (*grpcmux.GRPCClientMuxer, error) {
 		return nil, nil
 	}
 
-	var err error
 	c.grpcMuxerOnce.Do(func() {
-		c.grpcMuxer, err = grpcmux.NewGRPCClientMuxer(c.logger, addr)
+		c.grpcMuxer, c.grpcMuxerErr = grpcmux.NewGRPCClientMuxer(c.logger, addr)
 	})
-	if err != nil {
-		return nil, err
+	if c.grpcMuxerErr != nil {
+		return nil, c.grpcMuxerErr
 	}
 
 	return c.grpcMuxer, nil
