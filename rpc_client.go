@@ -181,6 +181,11 @@ var ErrPingTimeout = errors.New("plugin ping timed out")
 // naturally (it will unblock when the transport errors or the plugin
 // eventually responds). This is preferable to blocking the host forever on
 // a wedged plugin.
+//
+// Callers should treat ErrPingTimeout as "unhealthy, kill": the background
+// rpc.Call unblocks when the transport closes, which is normally triggered
+// by Client.Kill. Retrying Ping without killing will accumulate goroutines
+// until the transport eventually errors.
 func (c *RPCClient) Ping() error {
 	var empty struct{}
 	// Buffered Done channel so rpc.Go never blocks trying to report

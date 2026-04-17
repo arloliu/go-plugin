@@ -62,3 +62,45 @@ func TestRemoveManagedClient_NotPresent(t *testing.T) {
 		t.Fatalf("managedClients changed on no-op remove: before=%d after=%d", before, after)
 	}
 }
+
+// TestManagedClients_RemovedOnKill_Integration exercises the full Kill
+// deferred path against a real plugin subprocess. This guards against a
+// future refactor that moves the removeManagedClient call out of the
+// defer block and silently reintroduces the leak. Pairs with the unit
+// test above.
+func TestManagedClients_RemovedOnKill_Integration(t *testing.T) {
+	managedClientsLock.Lock()
+	baseline := len(managedClients)
+	managedClientsLock.Unlock()
+
+	process := helperProcess("mock")
+	c := NewClient(&ClientConfig{
+		Cmd:             process,
+		HandshakeConfig: testHandshake,
+		Plugins:         testPluginMap,
+		Managed:         true,
+	})
+
+	managedClientsLock.Lock()
+	afterCreate := len(managedClients)
+	managedClientsLock.Unlock()
+	if afterCreate != baseline+1 {
+		t.Fatalf("managed client not registered: baseline=%d afterCreate=%d", baseline, afterCreate)
+	}
+
+	// Start the plugin (the "mock" helper emits a valid handshake) so
+	// the Kill deferred block has a runner to wait on and reaches the
+	// removeManagedClient call.
+	if _, err := c.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	c.Kill()
+
+	managedClientsLock.Lock()
+	afterKill := len(managedClients)
+	managedClientsLock.Unlock()
+	if afterKill != baseline {
+		t.Fatalf("Kill did not remove managed client: baseline=%d afterKill=%d", baseline, afterKill)
+	}
+}
