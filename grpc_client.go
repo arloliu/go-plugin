@@ -111,7 +111,15 @@ type GRPCClient struct {
 // ClientProtocol impl.
 func (c *GRPCClient) Close() error {
 	_ = c.broker.Close()
-	_, _ = c.controller.Shutdown(c.doneCtx, &plugin.Empty{})
+	// Shutdown is best-effort: the RPC commonly returns "Unavailable" as
+	// the plugin's gRPC server tears itself down in response, which is the
+	// expected behaviour and should not make Close() look like a failure.
+	// We do, however, bound the call with a timeout so a wedged plugin
+	// cannot hang the caller indefinitely — c.doneCtx alone was unbounded
+	// until plugin exit.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultPingTimeout)
+	defer cancel()
+	_, _ = c.controller.Shutdown(ctx, &plugin.Empty{})
 	return c.Conn.Close()
 }
 
