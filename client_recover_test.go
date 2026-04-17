@@ -4,14 +4,17 @@
 package plugin
 
 import (
+	"context"
 	"errors"
 	"io"
+	"os/exec"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/go-plugin/runner"
 )
 
 // panicWriter panics on every Write. Used to prove that a misbehaving
@@ -88,3 +91,96 @@ func TestLogStderr_PanicRecovered(t *testing.T) {
 
 // ensure package compiles if tests reference this error alias
 var _ = errors.New
+
+// panicReadCloser panics on first Read. Used to drive a fake runner
+// whose Stdout() returns it — this exercises the production scanner
+// goroutine inside Client.Start, not a stand-in reproduction.
+type panicReadCloser struct{ fired bool }
+
+func (p *panicReadCloser) Read([]byte) (int, error) {
+	if !p.fired {
+		p.fired = true
+		panic("intentional scanner panic")
+	}
+	return 0, io.EOF
+}
+func (p *panicReadCloser) Close() error { return nil }
+
+// fakeRunner is a minimal runner.Runner whose lifecycle methods
+// support driving Client.Start far enough to spin up the stderr pump
+// and stdout scanner goroutines. After Start the test kills the runner
+// which unblocks the Wait call.
+type fakeRunner struct {
+	stdout io.ReadCloser
+	stderr io.ReadCloser
+	dead   chan struct{}
+}
+
+func newFakeRunner(stdout io.ReadCloser) *fakeRunner {
+	return &fakeRunner{
+		stdout: stdout,
+		stderr: io.NopCloser(strings.NewReader("")),
+		dead:   make(chan struct{}),
+	}
+}
+
+func (f *fakeRunner) Start(ctx context.Context) error { return nil }
+func (f *fakeRunner) Wait(ctx context.Context) error  { <-f.dead; return nil }
+func (f *fakeRunner) Kill(ctx context.Context) error {
+	select {
+	case <-f.dead:
+	default:
+		close(f.dead)
+	}
+	return nil
+}
+func (f *fakeRunner) Stdout() io.ReadCloser { return f.stdout }
+func (f *fakeRunner) Stderr() io.ReadCloser { return f.stderr }
+func (f *fakeRunner) Name() string          { return "fake-runner" }
+func (f *fakeRunner) ID() string            { return "fake-1" }
+func (f *fakeRunner) Diagnose(ctx context.Context) string {
+	return ""
+}
+func (f *fakeRunner) PluginToHost(n, a string) (string, string, error) { return n, a, nil }
+func (f *fakeRunner) HostToPlugin(n, a string) (string, string, error) { return n, a, nil }
+
+// TestStdoutScanner_PanicRecovered_Integration drives Client.Start with
+// a runner whose Stdout() panics on first Read. The production scanner
+// goroutine must recover the panic and log it; the host must not crash.
+// Start itself will return an error (handshake fails because stdout
+// yields no valid line), but the key assertion is that the recover
+// path fired.
+func TestStdoutScanner_PanicRecovered_Integration(t *testing.T) {
+	logs := &recordWriter{}
+	logger := hclog.New(&hclog.LoggerOptions{
+		Output: logs,
+		Level:  hclog.Trace,
+	})
+
+	// RunnerFunc injects our fake runner so Client.Start uses it.
+	runnerFunc := func(_ hclog.Logger, _ *exec.Cmd, _ string) (runner.Runner, error) {
+		return newFakeRunner(&panicReadCloser{}), nil
+	}
+
+	c := NewClient(&ClientConfig{
+		HandshakeConfig: HandshakeConfig{
+			ProtocolVersion:  1,
+			MagicCookieKey:   "TEST",
+			MagicCookieValue: "TEST",
+		},
+		Plugins:      PluginSet{},
+		RunnerFunc:   runnerFunc,
+		Logger:       logger,
+		StartTimeout: 500 * time.Millisecond,
+	})
+
+	// Start will fail (no valid handshake line), but not before the
+	// scanner goroutine has taken the panic.
+	_, _ = c.Start()
+	c.Kill()
+
+	// Recover is logged via the Client's own logger, which we installed.
+	if !strings.Contains(logs.String(), "panic in plugin stdout scanner") {
+		t.Fatalf("expected scanner recover log; got %q", logs.String())
+	}
+}

@@ -5,6 +5,7 @@ package plugin
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"github.com/hashicorp/go-plugin/internal/plugin"
@@ -16,15 +17,29 @@ type grpcControllerServer struct {
 	server *GRPCServer
 }
 
-// gracefulStopTimeout bounds how long the server will wait for in-flight
-// RPCs to drain before escalating to a hard Stop. Client.Kill gives the
-// plugin a 2s window to exit, and CmdAttachedRunner.Wait polls liveness
-// on a 1s tick, so the exit-notification budget is ~1s. A tight default
-// here (100ms) lets fast RPCs finish returning while still leaving the
-// bulk of the exit budget for the pidWait poll to notice the exit.
-// Declared as a var so host integrators who set a longer Kill grace can
-// also widen this.
-var gracefulStopTimeout = 100 * time.Millisecond
+// gracefulStopTimeoutNs bounds how long the server will wait for in-flight
+// RPCs to drain before escalating to a hard Stop (in nanoseconds, for
+// atomic access). Client.Kill gives the plugin a 2s window to exit, and
+// CmdAttachedRunner.Wait polls liveness on a 1s tick, so the exit-
+// notification budget is ~1s. A tight default here (100ms) lets fast
+// RPCs finish returning while still leaving the bulk of the exit budget
+// for the pidWait poll to notice the exit. Host integrators who set a
+// longer Kill grace can also widen this via SetGracefulStopTimeout.
+var gracefulStopTimeoutNs atomic.Int64
+
+func init() {
+	gracefulStopTimeoutNs.Store(int64(100 * time.Millisecond))
+}
+
+// SetGracefulStopTimeout sets the drain window used by the controller's
+// Shutdown handler. Safe to call concurrently.
+func SetGracefulStopTimeout(d time.Duration) {
+	gracefulStopTimeoutNs.Store(int64(d))
+}
+
+func gracefulStopTimeout() time.Duration {
+	return time.Duration(gracefulStopTimeoutNs.Load())
+}
 
 // Shutdown stops the grpc server. It prefers a graceful stop so that
 // in-flight RPCs (for example a long equipment command mid-flight) can
@@ -48,7 +63,7 @@ func (s *grpcControllerServer) Shutdown(ctx context.Context, _ *plugin.Empty) (*
 
 		select {
 		case <-stopped:
-		case <-time.After(gracefulStopTimeout):
+		case <-time.After(gracefulStopTimeout()):
 			// Graceful drain exceeded its budget — force the server
 			// down so the plugin process can exit and the host's
 			// supervisor can move on.

@@ -63,6 +63,46 @@ func TestRemoveManagedClient_NotPresent(t *testing.T) {
 	}
 }
 
+// TestManagedClients_DoubleKill_Idempotent verifies that calling Kill a
+// second time on a managed client does not corrupt or mutate the
+// managedClients slice. The first Kill removes the entry; the second
+// must be a no-op in terms of slice state. Without this guarantee a
+// supervisor that optimistically calls Kill from multiple cleanup paths
+// would risk slice corruption.
+func TestManagedClients_DoubleKill_Idempotent(t *testing.T) {
+	managedClientsLock.Lock()
+	baseline := len(managedClients)
+	managedClientsLock.Unlock()
+
+	process := helperProcess("mock")
+	c := NewClient(&ClientConfig{
+		Cmd:             process,
+		HandshakeConfig: testHandshake,
+		Plugins:         testPluginMap,
+		Managed:         true,
+	})
+	if _, err := c.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	c.Kill()
+	managedClientsLock.Lock()
+	afterFirst := len(managedClients)
+	managedClientsLock.Unlock()
+
+	c.Kill()
+	managedClientsLock.Lock()
+	afterSecond := len(managedClients)
+	managedClientsLock.Unlock()
+
+	if afterFirst != baseline {
+		t.Fatalf("first Kill did not return slice to baseline: baseline=%d after=%d", baseline, afterFirst)
+	}
+	if afterSecond != afterFirst {
+		t.Fatalf("second Kill changed slice: afterFirst=%d afterSecond=%d", afterFirst, afterSecond)
+	}
+}
+
 // TestManagedClients_RemovedOnKill_Integration exercises the full Kill
 // deferred path against a real plugin subprocess. This guards against a
 // future refactor that moves the removeManagedClient call out of the

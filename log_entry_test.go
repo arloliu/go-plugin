@@ -68,3 +68,16 @@ func TestParseJSON_Valid(t *testing.T) {
 		t.Fatalf("bad parse: %+v", entry)
 	}
 }
+
+// TestParseJSON_MalformedTimestampStringReturnsError covers the path where
+// @timestamp is a string (so the checked type assertion succeeds) but is
+// not in the expected time.Parse layout. The function should surface the
+// error rather than swallow it, so the stderr pump's caller can log the
+// parse failure instead of misclassifying a bad line as a successful parse.
+func TestParseJSON_MalformedTimestampStringReturnsError(t *testing.T) {
+	input := []byte(`{"@message": "hi", "@timestamp": "not-a-date"}`)
+	_, err := parseJSON(input)
+	if err == nil {
+		t.Fatalf("expected error from invalid timestamp string; got nil")
+	}
+}
