@@ -44,23 +44,31 @@ func parseJSON(input []byte) (*logEntry, error) {
 		return nil, err
 	}
 
-	// Parse hclog-specific objects
+	// Parse hclog-specific objects. Use checked type assertions so that a
+	// plugin emitting a malformed JSON log line (e.g. non-string @message)
+	// does not panic the host-side log pump.
 	if v, ok := raw["@message"]; ok {
-		entry.Message = v.(string)
+		if s, ok := v.(string); ok {
+			entry.Message = s
+		}
 		delete(raw, "@message")
 	}
 
 	if v, ok := raw["@level"]; ok {
-		entry.Level = v.(string)
+		if s, ok := v.(string); ok {
+			entry.Level = s
+		}
 		delete(raw, "@level")
 	}
 
 	if v, ok := raw["@timestamp"]; ok {
-		t, err := time.Parse("2006-01-02T15:04:05.000000Z07:00", v.(string))
-		if err != nil {
-			return nil, err
+		if s, ok := v.(string); ok {
+			t, err := time.Parse("2006-01-02T15:04:05.000000Z07:00", s)
+			if err != nil {
+				return nil, err
+			}
+			entry.Timestamp = t
 		}
-		entry.Timestamp = t
 		delete(raw, "@timestamp")
 	}
 
