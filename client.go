@@ -75,6 +75,11 @@ var (
 // defaultPluginLogBufferSize is the default size of the buffer used to read from stderr for plugin log lines.
 const defaultPluginLogBufferSize = 64 * 1024
 
+// defaultShutdownTimeout is how long Client.Kill waits for the plugin
+// subprocess to exit after Close() before escalating to a force kill.
+// Declared as a var rather than a const so tests can shrink it if needed.
+var defaultShutdownTimeout = 2 * time.Second
+
 // Client handles the lifecycle of a plugin application. It launches
 // plugins, connects to them, dispenses interface implementations, and handles
 // killing the process.
@@ -285,6 +290,15 @@ type ClientConfig struct {
 	// shorter value in latency-sensitive supervisors and a longer value if
 	// plugins have bursty GC pauses that briefly exceed the default.
 	PingTimeout time.Duration
+
+	// ShutdownTimeout bounds how long Client.Kill waits for the plugin
+	// subprocess to exit after Close() before force-killing via
+	// runner.Kill. If zero, defaults to 2s. For plugins that hold slow I/O
+	// to equipment at shutdown, a longer value (e.g. 10–30s) lets them
+	// flush cleanly. Note that the plugin-side GracefulStop window for
+	// in-flight gRPC RPCs is set on the plugin; see gracefulStopTimeout
+	// in grpc_controller.go for that knob.
+	ShutdownTimeout time.Duration
 
 	// DisableProcessGroupKill reverts the plugin subprocess lifecycle to the
 	// pre-fix behaviour of signalling only the plugin PID on Kill (instead
@@ -596,11 +610,15 @@ func (c *Client) Kill() {
 	// of time to allow that to happen. To wait for this we just wait on the
 	// doneCh which would be closed if the process exits.
 	if graceful {
+		grace := c.config.ShutdownTimeout
+		if grace <= 0 {
+			grace = defaultShutdownTimeout
+		}
 		select {
 		case <-c.doneCtx.Done():
 			c.logger.Debug("plugin exited")
 			return
-		case <-time.After(2 * time.Second):
+		case <-time.After(grace):
 		}
 	}
 
