@@ -279,6 +279,17 @@ type ClientConfig struct {
 	// UnixSocketConfig configures additional options for any Unix sockets
 	// that are created. Not normally required. Not supported on Windows.
 	UnixSocketConfig *UnixSocketConfig
+
+	// DisableProcessGroupKill reverts the plugin subprocess lifecycle to the
+	// pre-fix behaviour of signalling only the plugin PID on Kill (instead
+	// of its whole POSIX process group). Set this if your plugin spawns TTY-
+	// interactive children — e.g. ssh prompting for a passphrase or a pager
+	// — that expect to be in the controlling terminal's foreground process
+	// group. Default is false (kill the whole process tree), which is the
+	// safe choice for long-running host daemons because it prevents orphaned
+	// subprocesses on restart. Windows ignores this flag; the single-PID
+	// path is used there regardless until a Job Object implementation lands.
+	DisableProcessGroupKill bool
 }
 
 type UnixSocketConfig struct {
@@ -749,11 +760,14 @@ func (c *Client) Start() (addr net.Addr, err error) {
 			return nil, err
 		}
 	default:
-		runner, err = cmdrunner.NewCmdRunner(c.logger, cmd)
+		cr, err := cmdrunner.NewCmdRunner(c.logger, cmd)
 		if err != nil {
 			return nil, err
 		}
-
+		if c.config.DisableProcessGroupKill {
+			cr.SetDisableProcessGroup(true)
+		}
+		runner = cr
 	}
 
 	c.runner = runner

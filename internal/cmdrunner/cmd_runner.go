@@ -44,6 +44,11 @@ type CmdRunner struct {
 	path string
 	pid  int
 
+	// disableProcessGroup, when true, reverts to the pre-fix single-PID kill
+	// behaviour. Set via SetDisableProcessGroup for hosts that spawn
+	// TTY-interactive plugin children.
+	disableProcessGroup bool
+
 	addrTranslator
 }
 
@@ -69,12 +74,22 @@ func NewCmdRunner(logger hclog.Logger, cmd *exec.Cmd) (*CmdRunner, error) {
 	}, nil
 }
 
+// SetDisableProcessGroup toggles the process-group kill behaviour. Must be
+// called before Start. Defaults to false, i.e. the plugin runs in its own
+// POSIX process group and the whole group is signalled on Kill.
+func (c *CmdRunner) SetDisableProcessGroup(v bool) {
+	c.disableProcessGroup = v
+}
+
 func (c *CmdRunner) Start(_ context.Context) error {
 	c.logger.Debug("starting plugin", "path", c.cmd.Path, "args", c.cmd.Args)
 	// Put the subprocess in its own process group on POSIX so Kill can
 	// clean up the whole process tree, not just the plugin PID. No-op on
-	// Windows.
-	configureProcessGroup(c.cmd)
+	// Windows. Callers who need the TTY-friendly single-PID behaviour can
+	// opt out via SetDisableProcessGroup.
+	if !c.disableProcessGroup {
+		configureProcessGroup(c.cmd)
+	}
 	err := c.cmd.Start()
 	if err != nil {
 		return err
@@ -97,12 +112,15 @@ func (c *CmdRunner) Kill(_ context.Context) error {
 	// Prefer killing the whole process group so descendants of the plugin
 	// (subprocesses it forked) go with it. On Windows killProcessGroup
 	// returns an unsupported error and we fall back to killing just the
-	// plugin PID.
-	if err := killProcessGroup(c.pid); err == nil {
-		return nil
-	} else if !errors.Is(err, os.ErrProcessDone) {
-		c.logger.Debug("process-group kill failed, falling back to single-pid kill",
-			"pid", c.pid, "error", err)
+	// plugin PID. If the caller opted out of process-group kill we also
+	// skip straight to the single-PID path.
+	if !c.disableProcessGroup {
+		if err := killProcessGroup(c.pid); err == nil {
+			return nil
+		} else if !errors.Is(err, os.ErrProcessDone) {
+			c.logger.Debug("process-group kill failed, falling back to single-pid kill",
+				"pid", c.pid, "error", err)
+		}
 	}
 
 	err := c.cmd.Process.Kill()
