@@ -58,7 +58,7 @@ func (m *MuxBroker) Accept(id uint32) (net.Conn, error) {
 	select {
 	case c = <-p.ch:
 		close(p.doneCh)
-	case <-time.After(5 * time.Second):
+	case <-time.After(BrokerTimeout):
 		m.Lock()
 		defer m.Unlock()
 		delete(m.streams, id)
@@ -186,7 +186,7 @@ func (m *MuxBroker) timeoutWait(id uint32, p *muxBrokerPending) {
 	timeout := false
 	select {
 	case <-p.doneCh:
-	case <-time.After(5 * time.Second):
+	case <-time.After(BrokerTimeout):
 		timeout = true
 	}
 

@@ -43,6 +43,8 @@ type GRPCServerMuxer struct {
 
 	acceptMutex    sync.Mutex
 	acceptChannels map[uint32]chan acceptResult
+
+	sessionInitTimeout time.Duration
 }
 
 func NewGRPCServerMuxer(logger hclog.Logger, ln net.Listener) *GRPCServerMuxer {
@@ -59,6 +61,13 @@ func NewGRPCServerMuxer(logger hclog.Logger, ln net.Listener) *GRPCServerMuxer {
 	go m.acceptSession(ln)
 
 	return m
+}
+
+// SetSessionInitTimeout lets the enclosing plugin package thread its
+// BrokerTimeout knob through. Must be called before the first caller
+// reaches session(). Zero or negative values fall back to the default.
+func (m *GRPCServerMuxer) SetSessionInitTimeout(d time.Duration) {
+	m.sessionInitTimeout = d
 }
 
 // acceptSessionAndMuxAccept is responsible for establishing the yamux session,
@@ -86,13 +95,19 @@ func (m *GRPCServerMuxer) acceptSession(ln net.Listener) {
 	}
 }
 
+const defaultSessionInitTimeout = 5 * time.Second
+
 func (m *GRPCServerMuxer) session() (*yamux.Session, error) {
+	timeout := m.sessionInitTimeout
+	if timeout <= 0 {
+		timeout = defaultSessionInitTimeout
+	}
 	select {
 	case err := <-m.sessionErrCh:
 		if err != nil {
 			return nil, err
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(timeout):
 		return nil, errors.New("timed out waiting for connection to be established")
 	}
 

@@ -391,6 +391,7 @@ func Serve(opts *ServeConfig) {
 		var muxer *grpcmux.GRPCServerMuxer
 		if multiplex, _ := strconv.ParseBool(os.Getenv(envMultiplexGRPC)); multiplex {
 			muxer = grpcmux.NewGRPCServerMuxer(logger, listener)
+			muxer.SetSessionInitTimeout(BrokerTimeout)
 			listener = muxer
 		}
 

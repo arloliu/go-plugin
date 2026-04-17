@@ -491,7 +491,7 @@ func (b *GRPCBroker) knock(id uint32) error {
 		if msg.Knock.Error != "" {
 			return fmt.Errorf("failed to knock for id %d: %s", id, msg.Knock.Error)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(BrokerTimeout):
 		return fmt.Errorf("timeout waiting for multiplexing knock handshake on id %d", id)
 	}
 
@@ -534,7 +534,7 @@ func (b *GRPCBroker) DialWithOptions(id uint32, opts ...grpc.DialOption) (conn *
 	select {
 	case c = <-p.ch:
 		close(p.doneCh)
-	case <-time.After(5 * time.Second):
+	case <-time.After(BrokerTimeout):
 		return nil, fmt.Errorf("timeout waiting for connection info")
 	}
 
@@ -642,7 +642,7 @@ func (m *GRPCBroker) timeoutWait(id uint32, p *gRPCBrokerPending) {
 	// for a timeout.
 	select {
 	case <-p.doneCh:
-	case <-time.After(5 * time.Second):
+	case <-time.After(BrokerTimeout):
 	}
 
 	m.Lock()
