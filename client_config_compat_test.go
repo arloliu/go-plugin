@@ -101,9 +101,19 @@ func TestClientConfig_ShutdownTimeout_RespectsShorterValue(t *testing.T) {
 	c.Kill()
 	elapsed := time.Since(start)
 
-	// Expect well under defaultShutdownTimeout (5s). The configured
-	// 200ms plus cleanup overhead should still fit in ~2s.
-	if elapsed > 2*time.Second {
-		t.Fatalf("Kill respected the 5s default, not the 200ms config; elapsed=%v", elapsed)
+	// Bracket tightly so regressions that silently ignore the config
+	// and fall back to a larger hardcoded value (2s or 5s) are caught,
+	// and so do regressions that skip the graceful-wait entirely.
+	//
+	// Lower bound: the plugin does not exit on Close within the budget
+	// here, so the grace-wait path must actually fire and consume at
+	// least most of the configured 200ms before the force kill.
+	// Upper bound: a 500ms hardcoded regression would still pass a
+	// loose "< 2s" assertion; pin to under 1s.
+	if elapsed < 100*time.Millisecond {
+		t.Fatalf("Kill returned too fast; graceful wait did not fire; elapsed=%v", elapsed)
+	}
+	if elapsed > 1*time.Second {
+		t.Fatalf("Kill used a longer window than configured 200ms; elapsed=%v (suggests fallback to default %v or hardcoded value)", elapsed, defaultShutdownTimeout)
 	}
 }
