@@ -71,6 +71,10 @@ func NewCmdRunner(logger hclog.Logger, cmd *exec.Cmd) (*CmdRunner, error) {
 
 func (c *CmdRunner) Start(_ context.Context) error {
 	c.logger.Debug("starting plugin", "path", c.cmd.Path, "args", c.cmd.Args)
+	// Put the subprocess in its own process group on POSIX so Kill can
+	// clean up the whole process tree, not just the plugin PID. No-op on
+	// Windows.
+	configureProcessGroup(c.cmd)
 	err := c.cmd.Start()
 	if err != nil {
 		return err
@@ -86,15 +90,26 @@ func (c *CmdRunner) Wait(_ context.Context) error {
 }
 
 func (c *CmdRunner) Kill(_ context.Context) error {
-	if c.cmd.Process != nil {
-		err := c.cmd.Process.Kill()
-		// Swallow ErrProcessDone, we support calling Kill multiple times.
-		if !errors.Is(err, os.ErrProcessDone) {
-			return err
-		}
+	if c.cmd.Process == nil {
 		return nil
 	}
 
+	// Prefer killing the whole process group so descendants of the plugin
+	// (subprocesses it forked) go with it. On Windows killProcessGroup
+	// returns an unsupported error and we fall back to killing just the
+	// plugin PID.
+	if err := killProcessGroup(c.pid); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrProcessDone) {
+		c.logger.Debug("process-group kill failed, falling back to single-pid kill",
+			"pid", c.pid, "error", err)
+	}
+
+	err := c.cmd.Process.Kill()
+	// Swallow ErrProcessDone, we support calling Kill multiple times.
+	if !errors.Is(err, os.ErrProcessDone) {
+		return err
+	}
 	return nil
 }
 
