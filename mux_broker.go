@@ -6,7 +6,6 @@ package plugin
 import (
 	"encoding/binary"
 	"fmt"
-	"log"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -83,7 +82,7 @@ func (m *MuxBroker) Accept(id uint32) (net.Conn, error) {
 func (m *MuxBroker) AcceptAndServe(id uint32, v interface{}) {
 	conn, err := m.Accept(id)
 	if err != nil {
-		log.Printf("[ERR] plugin: plugin acceptAndServe error: %s", err)
+		libLog().Error("plugin acceptAndServe error", "error", err)
 		return
 	}
 

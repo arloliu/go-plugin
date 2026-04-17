@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/rpc"
 	"sync"
@@ -50,11 +49,11 @@ func (s *RPCServer) Serve(lis net.Listener) {
 	for {
 		conn, err := lis.Accept()
 		if err != nil {
-			severity := "ERR"
 			if errors.Is(err, net.ErrClosed) {
-				severity = "DEBUG"
+				libLog().Debug("plugin server stopping", "error", err)
+			} else {
+				libLog().Error("plugin server accept error", "error", err)
 			}
-			log.Printf("[%s] plugin: plugin server: %s", severity, err)
 			return
 		}
 
@@ -70,7 +69,7 @@ func (s *RPCServer) ServeConn(conn io.ReadWriteCloser) {
 	mux, err := yamux.Server(conn, nil)
 	if err != nil {
 		_ = conn.Close()
-		log.Printf("[ERR] plugin: error creating yamux server: %s", err)
+		libLog().Error("error creating yamux server", "error", err)
 		return
 	}
 
@@ -79,7 +78,7 @@ func (s *RPCServer) ServeConn(conn io.ReadWriteCloser) {
 	if err != nil {
 		_ = mux.Close()
 		if err != io.EOF {
-			log.Printf("[ERR] plugin: error accepting control connection: %s", err)
+			libLog().Error("error accepting control connection", "error", err)
 		}
 
 		return
@@ -91,7 +90,7 @@ func (s *RPCServer) ServeConn(conn io.ReadWriteCloser) {
 		stdstream[i], err = mux.Accept()
 		if err != nil {
 			_ = mux.Close()
-			log.Printf("[ERR] plugin: accepting stream %d: %s", i, err)
+			libLog().Error("error accepting stdio stream", "index", i, "error", err)
 			return
 		}
 	}
@@ -188,7 +187,7 @@ func (d *dispenseServer) Dispense(
 	go func() {
 		conn, err := d.broker.Accept(id)
 		if err != nil {
-			log.Printf("[ERR] go-plugin: plugin dispense error: %s: %s", name, err)
+			libLog().Error("plugin dispense error", "name", name, "error", err)
 			return
 		}
 
@@ -201,7 +200,7 @@ func (d *dispenseServer) Dispense(
 func serve(conn io.ReadWriteCloser, name string, v interface{}) {
 	server := rpc.NewServer()
 	if err := server.RegisterName(name, v); err != nil {
-		log.Printf("[ERR] go-plugin: plugin dispense error: %s", err)
+		libLog().Error("plugin register error", "name", name, "error", err)
 		return
 	}
 

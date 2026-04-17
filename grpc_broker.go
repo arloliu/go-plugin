@@ -8,7 +8,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -309,7 +308,7 @@ func (b *GRPCBroker) Accept(id uint32) (net.Listener, error) {
 		go func() {
 			err := b.listenForKnocks(id)
 			if err != nil {
-				log.Printf("[ERR]: error listening for knocks, id: %d, error: %s", id, err)
+				libLog().Error("error listening for broker knocks", "id", id, "error", err)
 			}
 		}()
 
@@ -375,7 +374,7 @@ func (b *GRPCBroker) Accept(id uint32) (net.Listener, error) {
 func (b *GRPCBroker) AcceptAndServe(id uint32, newGRPCServer func([]grpc.ServerOption) *grpc.Server) {
 	ln, err := b.Accept(id)
 	if err != nil {
-		log.Printf("[ERR] plugin: plugin acceptAndServe error: %s", err)
+		libLog().Error("plugin acceptAndServe error", "error", err)
 		return
 	}
 	defer func() { _ = ln.Close() }()

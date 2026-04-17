@@ -5,7 +5,6 @@ package plugin
 
 import (
 	"io"
-	"log"
 )
 
 func copyStream(name string, dst io.Writer, src io.Reader) {
@@ -13,14 +12,14 @@ func copyStream(name string, dst io.Writer, src io.Reader) {
 	// crash the host process — just log and return. This runs inside
 	// fire-and-forget goroutines with no caller to observe a panic.
 	if src == nil {
-		log.Printf("[ERR] plugin: stream copy '%s' aborted: src is nil", name)
+		libLog().Error("stream copy aborted: src is nil", "stream", name)
 		return
 	}
 	if dst == nil {
-		log.Printf("[ERR] plugin: stream copy '%s' aborted: dst is nil", name)
+		libLog().Error("stream copy aborted: dst is nil", "stream", name)
 		return
 	}
 	if _, err := io.Copy(dst, src); err != nil && err != io.EOF {
-		log.Printf("[ERR] plugin: stream copy '%s' error: %s", name, err)
+		libLog().Error("stream copy error", "stream", name, "error", err)
 	}
 }
