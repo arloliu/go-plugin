@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"time"
 
 	"github.com/hashicorp/go-plugin/internal/plugin"
 	"google.golang.org/grpc"
@@ -16,6 +17,12 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
+
+// defaultPingTimeout bounds how long Ping() blocks before it reports an
+// unresponsive plugin. Without a bound, a wedged plugin would hang the
+// host supervisor indefinitely. Declared as a var rather than a const so
+// the value can be shortened in tests.
+var defaultPingTimeout = 10 * time.Second
 
 func dialGRPCConn(tls *tls.Config, dialer func(context.Context, string) (net.Conn, error), dialOpts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	// Build dialing options.
@@ -126,7 +133,9 @@ func (c *GRPCClient) Dispense(name string) (interface{}, error) {
 // ClientProtocol impl.
 func (c *GRPCClient) Ping() error {
 	client := grpc_health_v1.NewHealthClient(c.Conn)
-	_, err := client.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{
+	ctx, cancel := context.WithTimeout(context.Background(), defaultPingTimeout)
+	defer cancel()
+	_, err := client.Check(ctx, &grpc_health_v1.HealthCheckRequest{
 		Service: GRPCServiceName,
 	})
 

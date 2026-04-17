@@ -5,10 +5,12 @@ package plugin
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/rpc"
+	"time"
 
 	"github.com/hashicorp/yamux"
 )
@@ -162,12 +164,37 @@ func (c *RPCClient) Dispense(name string) (interface{}, error) {
 	return p.Client(c.broker, rpc.NewClient(conn))
 }
 
+// ErrPingTimeout is returned by Ping() when the plugin does not respond
+// within defaultPingTimeout. Callers can use errors.Is to distinguish a
+// timed-out ping from a transport-level error.
+var ErrPingTimeout = errors.New("plugin ping timed out")
+
 // Ping pings the connection to ensure it is still alive.
 //
 // The error from the RPC call is returned exactly if you want to inspect
 // it for further error analysis. Any error returned from here would indicate
 // that the connection to the plugin is not healthy.
+//
+// net/rpc has no native cancellation, so the ping is dispatched via the
+// async rpc.Go API and a timer bounds how long we wait. If the timer fires,
+// ErrPingTimeout is returned; the background call is left to complete
+// naturally (it will unblock when the transport errors or the plugin
+// eventually responds). This is preferable to blocking the host forever on
+// a wedged plugin.
 func (c *RPCClient) Ping() error {
 	var empty struct{}
-	return c.control.Call("Control.Ping", true, &empty)
+	// Buffered Done channel so rpc.Go never blocks trying to report
+	// completion if we've already given up.
+	done := make(chan *rpc.Call, 1)
+	call := c.control.Go("Control.Ping", true, &empty, done)
+
+	t := time.NewTimer(defaultPingTimeout)
+	defer t.Stop()
+
+	select {
+	case <-call.Done:
+		return call.Error
+	case <-t.C:
+		return ErrPingTimeout
+	}
 }
