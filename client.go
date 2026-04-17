@@ -798,6 +798,14 @@ func (c *Client) Start() (addr net.Addr, err error) {
 		defer c.clientWaitGroup.Done()
 		defer c.pipesWaitGroup.Done()
 		defer close(linesCh)
+		// Recover so that a panic inside the scanner (e.g. a writer
+		// further down the line misbehaving) cannot crash the host.
+		defer func() {
+			if r := recover(); r != nil {
+				c.logger.Error("panic in plugin stdout scanner (recovered)",
+					"plugin", runner.Name(), "panic", fmt.Sprintf("%v", r))
+			}
+		}()
 
 		scanner := bufio.NewScanner(runner.Stdout())
 		for scanner.Scan() {
@@ -1169,6 +1177,15 @@ func (c *Client) getGRPCMuxer(addr net.Addr) (*grpcmux.GRPCClientMuxer, error) {
 func (c *Client) logStderr(name string, r io.Reader) {
 	defer c.clientWaitGroup.Done()
 	defer c.pipesWaitGroup.Done()
+	// Recover from any panic inside the log pump (malformed plugin output,
+	// panicking user-provided io.Writer, etc.) so a misbehaving plugin can
+	// never take the host process down.
+	defer func() {
+		if r := recover(); r != nil {
+			c.logger.Error("panic in plugin stderr log pump (recovered)",
+				"plugin", name, "panic", fmt.Sprintf("%v", r))
+		}
+	}()
 
 	l := c.logger.Named(filepath.Base(name))
 	loggerLevel := l.GetLevel()
