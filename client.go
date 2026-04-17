@@ -361,6 +361,20 @@ func (s *SecureConfig) Check(filePath string) (bool, error) {
 	return subtle.ConstantTimeCompare(sum, s.Checksum) == 1, nil
 }
 
+// removeManagedClient drops c from the managedClients slice. It is a
+// no-op if c is not present. Called from Client.Kill so long-running
+// hosts do not accumulate stale references for killed plugins.
+func removeManagedClient(c *Client) {
+	managedClientsLock.Lock()
+	defer managedClientsLock.Unlock()
+	for i, mc := range managedClients {
+		if mc == c {
+			managedClients = append(managedClients[:i], managedClients[i+1:]...)
+			return
+		}
+	}
+}
+
 // This makes sure all the managed subprocesses are killed and properly
 // logged. This should be called before the parent process running the
 // plugins exits.
@@ -526,6 +540,14 @@ func (c *Client) Kill() {
 		c.l.Lock()
 		c.runner = nil
 		c.l.Unlock()
+
+		// If we were tracked as a managed client, drop ourselves from the
+		// global slice. Without this, a long-running host that creates and
+		// kills many managed clients accumulates stale *Client references
+		// for the lifetime of the process.
+		if c.config != nil && c.config.Managed {
+			removeManagedClient(c)
+		}
 	}()
 
 	// We need to check for address here. It is possible that the plugin
