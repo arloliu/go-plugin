@@ -6,7 +6,7 @@ package shared
 import (
 	"context"
 
-	"github.com/hashicorp/go-plugin/examples/grpc/proto"
+	"github.com/arloliu/go-plugin/examples/grpc/proto"
 )
 
 // GRPCClient is an implementation of KV that talks over RPC.

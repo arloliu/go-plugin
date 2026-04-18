@@ -7,8 +7,8 @@ import (
 	"context"
 
 	hclog "github.com/hashicorp/go-hclog"
-	plugin "github.com/hashicorp/go-plugin"
-	"github.com/hashicorp/go-plugin/examples/bidirectional/proto"
+	plugin "github.com/arloliu/go-plugin"
+	"github.com/arloliu/go-plugin/examples/bidirectional/proto"
 	"google.golang.org/grpc"
 )
 

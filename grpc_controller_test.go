@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/go-plugin/internal/plugin"
+	"github.com/arloliu/go-plugin/internal/plugin"
 	"google.golang.org/grpc"
 )
 

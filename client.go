@@ -25,9 +25,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/go-plugin/internal/cmdrunner"
-	"github.com/hashicorp/go-plugin/internal/grpcmux"
-	"github.com/hashicorp/go-plugin/runner"
+	"github.com/arloliu/go-plugin/internal/cmdrunner"
+	"github.com/arloliu/go-plugin/internal/grpcmux"
+	"github.com/arloliu/go-plugin/runner"
 	"google.golang.org/grpc"
 )
 
@@ -1006,7 +1006,7 @@ func (c *Client) Start() (addr net.Addr, err error) {
 		if c.config.GRPCBrokerMultiplex && c.protocol == ProtocolGRPC {
 			if len(parts) <= 6 {
 				return nil, fmt.Errorf("%w; for Go plugins, you will need to update the "+
-					"github.com/hashicorp/go-plugin dependency and recompile", ErrGRPCBrokerMuxNotSupported)
+					"github.com/arloliu/go-plugin dependency and recompile", ErrGRPCBrokerMuxNotSupported)
 			}
 			if muxSupported, err := strconv.ParseBool(parts[6]); err != nil {
 				return nil, fmt.Errorf("error parsing %q as a boolean for gRPC broker multiplexing support", parts[6])

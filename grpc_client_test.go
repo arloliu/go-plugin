@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	grpctest "github.com/hashicorp/go-plugin/test/grpc"
+	grpctest "github.com/arloliu/go-plugin/test/grpc"
 	"github.com/jhump/protoreflect/grpcreflect"
 	"google.golang.org/grpc"
 )

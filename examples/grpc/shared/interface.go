@@ -10,8 +10,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/hashicorp/go-plugin"
-	"github.com/hashicorp/go-plugin/examples/grpc/proto"
+	"github.com/arloliu/go-plugin"
+	"github.com/arloliu/go-plugin/examples/grpc/proto"
 )
 
 const (

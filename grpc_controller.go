@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hashicorp/go-plugin/internal/plugin"
+	"github.com/arloliu/go-plugin/internal/plugin"
 )
 
 // GRPCControllerServer handles shutdown calls to terminate the server when the

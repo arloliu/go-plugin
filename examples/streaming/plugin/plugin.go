@@ -10,8 +10,8 @@ import (
 	"os"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/go-plugin"
-	"github.com/hashicorp/go-plugin/examples/streaming/shared"
+	"github.com/arloliu/go-plugin"
+	"github.com/arloliu/go-plugin/examples/streaming/shared"
 )
 
 type FileStreamer struct {

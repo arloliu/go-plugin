@@ -22,8 +22,8 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/go-plugin/internal/cmdrunner"
-	"github.com/hashicorp/go-plugin/runner"
+	"github.com/arloliu/go-plugin/internal/cmdrunner"
+	"github.com/arloliu/go-plugin/runner"
 )
 
 func TestClient(t *testing.T) {

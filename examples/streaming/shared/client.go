@@ -8,7 +8,7 @@ import (
 	"context"
 	"io"
 
-	"github.com/hashicorp/go-plugin/examples/streaming/proto"
+	"github.com/arloliu/go-plugin/examples/streaming/proto"
 )
 
 type StreamerGRPCClient struct {

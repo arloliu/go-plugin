@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/hashicorp/go-plugin"
-	"github.com/hashicorp/go-plugin/examples/grpc/shared"
+	"github.com/arloliu/go-plugin"
+	"github.com/arloliu/go-plugin/examples/grpc/shared"
 )
 
 // Here is a real implementation of KV that uses grpc and  writes to a local

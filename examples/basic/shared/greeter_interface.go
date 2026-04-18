@@ -6,7 +6,7 @@ package shared
 import (
 	"net/rpc"
 
-	"github.com/hashicorp/go-plugin"
+	"github.com/arloliu/go-plugin"
 )
 
 // Greeter is the interface that we're exposing as a plugin.
