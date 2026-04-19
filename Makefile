@@ -8,6 +8,7 @@ GO              ?= go
 GOLANGCI_LINT   ?= golangci-lint
 COVERAGE_OUT    ?= coverage.out
 PKG             ?= ./...
+LATEST_GIT_TAG  := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 
 .DEFAULT_GOAL := help
 
