@@ -128,6 +128,8 @@ func (m *MuxBroker) Dial(id uint32) (net.Conn, error) {
 // It is possible for very long-running plugin hosts to wrap this value,
 // though it would require a very large amount of RPC calls. In practice
 // we've never seen it happen.
+//
+//nolint:staticcheck // ST1003: NextId is retained for API compatibility; renaming to NextID would break consumers.
 func (m *MuxBroker) NextId() uint32 {
 	return atomic.AddUint32(&m.nextID, 1)
 }

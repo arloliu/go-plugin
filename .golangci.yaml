@@ -10,9 +10,38 @@ linters:
     - staticcheck    # Broad static analysis (SA, ST, QF, S1 checks)
     - unused         # Exported/unexported symbols that are never used
 
+    # Error-handling hygiene — important for a library
+    - errorlint                 # Enforce errors.Is/As and %w wrapping
+    - nilerr                    # Return nil when err is non-nil
+    - durationcheck             # Catches duration * duration bugs
+
+    # Dead code / correctness helpers
+    - unconvert                 # Unnecessary type conversions
+    - wastedassign              # Assignments whose value is never read
+    - predeclared               # Shadowing of predeclared identifiers
+    - makezero                  # Non-zero-length make followed by append
+    - reassign                  # Reassigning top-level variables (e.g. os.Stderr)
+    - copyloopvar               # Legacy loop-variable copying (Go ≥1.22 only)
+    - gocheckcompilerdirectives # Malformed //go: directives
+    - bodyclose                 # HTTP response bodies left open
+
+    # Concurrency / context
+    - tparallel                 # t.Parallel misuse
+    - fatcontext                # Nested context creation in loops
+
     # Style and idioms
     - misspell       # Common English misspellings in comments and strings
     - revive         # Opinionated but pragmatic Go linter (replaces golint)
+    - dupword        # Duplicate words in comments ("the the")
+    - whitespace     # Leading / trailing whitespace inside blocks
+    - nakedret       # Discourages naked returns in long functions
+    - usestdlibvars  # Use stdlib constants instead of magic strings/ints
+    - goprintffuncname # *f/*ln/*Printf naming convention
+    - asciicheck     # Non-ASCII identifiers
+    - perfsprint     # fmt.Sprintf/Errorf → strconv / errors.New / concatenation
+
+    # Test hygiene
+    - thelper        # t.Helper() on test-helper functions
 
     # Security
     - gosec          # Common security mistakes (subprocess, file paths, crypto)
@@ -26,10 +55,9 @@ linters:
         # error-return: error values should be the last return value.
         - name: error-return
           severity: warning
-        # NOTE: exported (comment format) and var-naming (NextId/underscore names)
-        # are intentionally omitted. The inherited codebase predates these
-        # conventions; exported symbols like NextId() can't be renamed without
-        # breaking the public API. Address incrementally in new code.
+        # NOTE: exported (comment format) is enforced via staticcheck ST1020/21/22.
+        # var-naming (ST1003) is enforced globally; public API exceptions are
+        # tagged with per-site `//lint:ignore ST1003` directives.
 
     gosec:
       excludes:
@@ -48,18 +76,14 @@ linters:
     staticcheck:
       checks:
         - "all"
-        - "-SA1019" # Deprecated API (grpc.Dial); tracked separately for migration
-        - "-ST1000" # Missing package comment — enforce via review for public packages
-        - "-ST1003" # Naming conventions (underscores, Id vs ID); fix incrementally
-        - "-ST1016" # Inconsistent receiver names — cosmetic; inherited from upstream
-        - "-ST1020" # Exported function comment format — enforce via review for new code
-        - "-ST1021" # Exported type comment format — enforce via review for new code
-        - "-ST1022" # Exported var comment format — enforce via review for new code
+        # SA1019 is intentionally enabled; grpc.Dial is not deprecated at the
+        # current pinned grpc-go version. Remove this comment when it starts
+        # firing and do the grpc.NewClient migration.
 
   exclusions:
     rules:
-      # Test files: relaxed errcheck (testify assertions), gosec (low-risk context),
-      # and revive (doc format is acceptable in tests).
+      # Test files: relaxed errcheck (testify-style helpers), gosec (low-risk
+      # context), and revive (doc format is acceptable in tests).
       - path: _test\.go
         linters:
           - errcheck
@@ -83,7 +107,9 @@ linters:
           - revive
           - gosec
 
-    # Example programs are illustrative, not production code.
+    # Example programs demonstrate patterns (e.g. `sh -c "$PLUGIN_BIN"`) that
+    # gosec flags by design. Lint in a follow-up if we decide examples should
+    # be production-hardened.
     paths:
       - examples/
 

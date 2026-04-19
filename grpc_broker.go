@@ -567,6 +567,8 @@ func (b *GRPCBroker) DialWithOptions(id uint32, opts ...grpc.DialOption) (conn *
 // It is possible for very long-running plugin hosts to wrap this value,
 // though it would require a very large amount of calls. In practice
 // we've never seen it happen.
+//
+//nolint:staticcheck // ST1003: NextId is retained for API compatibility; renaming to NextID would break consumers.
 func (b *GRPCBroker) NextId() uint32 {
 	return atomic.AddUint32(&b.nextID, 1)
 }
