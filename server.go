@@ -546,7 +546,7 @@ func serverListener_tcp() (net.Listener, error) {
 	default:
 		minPort, err = strconv.ParseInt(envMinPort, 10, 32)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't get value from PLUGIN_MIN_PORT: %v", err)
+			return nil, fmt.Errorf("couldn't get value from PLUGIN_MIN_PORT: %w", err)
 		}
 	}
 
@@ -556,7 +556,7 @@ func serverListener_tcp() (net.Listener, error) {
 	default:
 		maxPort, err = strconv.ParseInt(envMaxPort, 10, 32)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't get value from PLUGIN_MAX_PORT: %v", err)
+			return nil, fmt.Errorf("couldn't get value from PLUGIN_MAX_PORT: %w", err)
 		}
 	}
 

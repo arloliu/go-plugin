@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"testing"
 
@@ -20,7 +21,7 @@ import (
 )
 
 func TestSetGroup(t *testing.T) {
-	group, err := user.LookupGroupId(fmt.Sprintf("%d", os.Getgid()))
+	group, err := user.LookupGroupId(strconv.Itoa(os.Getgid()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +33,7 @@ func TestSetGroup(t *testing.T) {
 	for name, tc := range map[string]struct {
 		group string
 	}{
-		"as integer": {fmt.Sprintf("%d", os.Getgid())},
+		"as integer": {strconv.Itoa(os.Getgid())},
 		"as name":    {group.Name},
 	} {
 		t.Run(name, func(t *testing.T) {

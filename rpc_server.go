@@ -36,13 +36,13 @@ type RPCServer struct {
 	lock sync.Mutex
 }
 
-// ServerProtocol impl.
+// Init implements ServerProtocol.
 func (s *RPCServer) Init() error { return nil }
 
-// ServerProtocol impl.
+// Config implements ServerProtocol.
 func (s *RPCServer) Config() string { return "" }
 
-// ServerProtocol impl.
+// Serve implements ServerProtocol.
 func (s *RPCServer) Serve(lis net.Listener) {
 	defer s.done()
 
@@ -77,7 +77,7 @@ func (s *RPCServer) ServeConn(conn io.ReadWriteCloser) {
 	control, err := mux.Accept()
 	if err != nil {
 		_ = mux.Close()
-		if err != io.EOF {
+		if !errors.Is(err, io.EOF) {
 			libLog().Error("error accepting control connection", "error", err)
 		}
 

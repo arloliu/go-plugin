@@ -34,12 +34,13 @@ type TestOptions struct {
 
 // TestConn is a helper function for returning a client and server
 // net.Conn connected to each other.
-func TestConn(t testing.TB) (net.Conn, net.Conn) {
+func TestConn(tb testing.TB) (net.Conn, net.Conn) {
+	tb.Helper()
 	// Listen to any local port. This listener will be closed
 	// after a single connection is established.
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("err: %s", err)
+		tb.Fatalf("err: %s", err)
 	}
 
 	// Start a goroutine to accept our client connection
@@ -51,14 +52,14 @@ func TestConn(t testing.TB) (net.Conn, net.Conn) {
 		var err error
 		serverConn, err = l.Accept()
 		if err != nil {
-			t.Fatalf("err: %s", err)
+			tb.Fatalf("err: %s", err)
 		}
 	}()
 
 	// Connect to the server
 	clientConn, err := net.Dial("tcp", l.Addr().String())
 	if err != nil {
-		t.Fatalf("err: %s", err)
+		tb.Fatalf("err: %s", err)
 	}
 
 	// Wait for the server side to acknowledge it has connected
@@ -68,8 +69,9 @@ func TestConn(t testing.TB) (net.Conn, net.Conn) {
 }
 
 // TestRPCConn returns a rpc client and server connected to each other.
-func TestRPCConn(t testing.TB) (*rpc.Client, *rpc.Server) {
-	clientConn, serverConn := TestConn(t)
+func TestRPCConn(tb testing.TB) (*rpc.Client, *rpc.Server) {
+	tb.Helper()
+	clientConn, serverConn := TestConn(tb)
 
 	server := rpc.NewServer()
 	go server.ServeConn(serverConn)
@@ -80,9 +82,10 @@ func TestRPCConn(t testing.TB) (*rpc.Client, *rpc.Server) {
 
 // TestPluginRPCConn returns a plugin RPC client and server that are connected
 // together and configured.
-func TestPluginRPCConn(t testing.TB, ps map[string]Plugin, opts *TestOptions) (*RPCClient, *RPCServer) {
+func TestPluginRPCConn(tb testing.TB, ps map[string]Plugin, opts *TestOptions) (*RPCClient, *RPCServer) {
+	tb.Helper()
 	// Create two net.Conns we can use to shuttle our control connection
-	clientConn, serverConn := TestConn(t)
+	clientConn, serverConn := TestConn(tb)
 
 	// Start up the server
 	server := &RPCServer{Plugins: ps, Stdout: new(bytes.Buffer), Stderr: new(bytes.Buffer)}
@@ -99,7 +102,7 @@ func TestPluginRPCConn(t testing.TB, ps map[string]Plugin, opts *TestOptions) (*
 	// Connect the client to the server
 	client, err := NewRPCClient(clientConn, ps)
 	if err != nil {
-		t.Fatalf("err: %s", err)
+		tb.Fatalf("err: %s", err)
 	}
 
 	return client, server
@@ -108,11 +111,12 @@ func TestPluginRPCConn(t testing.TB, ps map[string]Plugin, opts *TestOptions) (*
 // TestGRPCConn returns a gRPC client conn and grpc server that are connected
 // together and configured. The register function is used to register services
 // prior to the Serve call. This is used to test gRPC connections.
-func TestGRPCConn(t testing.TB, register func(*grpc.Server)) (*grpc.ClientConn, *grpc.Server) {
+func TestGRPCConn(tb testing.TB, register func(*grpc.Server)) (*grpc.ClientConn, *grpc.Server) {
+	tb.Helper()
 	// Create a listener
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("err: %s", err)
+		tb.Fatalf("err: %s", err)
 	}
 
 	server := grpc.NewServer()
@@ -126,7 +130,7 @@ func TestGRPCConn(t testing.TB, register func(*grpc.Server)) (*grpc.ClientConn, 
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		t.Fatalf("err: %s", err)
+		tb.Fatalf("err: %s", err)
 	}
 
 	// Connection successful, close the listener
@@ -137,11 +141,12 @@ func TestGRPCConn(t testing.TB, register func(*grpc.Server)) (*grpc.ClientConn, 
 
 // TestPluginGRPCConn returns a plugin gRPC client and server that are connected
 // together and configured. This is used to test gRPC connections.
-func TestPluginGRPCConn(t testing.TB, multiplex bool, ps map[string]Plugin) (*GRPCClient, *GRPCServer) {
+func TestPluginGRPCConn(tb testing.TB, multiplex bool, ps map[string]Plugin) (*GRPCClient, *GRPCServer) {
+	tb.Helper()
 	// Create a listener
 	ln, err := serverListener(UnixSocketConfig{})
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 
 	logger := hclog.New(&hclog.LoggerOptions{
@@ -164,7 +169,7 @@ func TestPluginGRPCConn(t testing.TB, multiplex bool, ps map[string]Plugin) (*GR
 		muxer:   muxer,
 	}
 	if err := server.Init(); err != nil {
-		t.Fatalf("err: %s", err)
+		tb.Fatalf("err: %s", err)
 	}
 	go server.Serve(ln)
 
@@ -180,7 +185,7 @@ func TestPluginGRPCConn(t testing.TB, multiplex bool, ps map[string]Plugin) (*GR
 
 	grpcClient, err := newGRPCClient(context.Background(), client)
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 
 	return grpcClient, server

@@ -1,8 +1,8 @@
 // Copyright IBM Corp. 2016, 2025
 // SPDX-License-Identifier: MPL-2.0
 
-// The plugin package exposes functions and helpers for communicating to
-// plugins which are implemented as standalone binary applications.
+// Package plugin exposes functions and helpers for communicating to plugins
+// which are implemented as standalone binary applications.
 //
 // plugin.Client fully manages the lifecycle of executing the application,
 // connecting to it, and returning the RPC client for dispensing plugins.

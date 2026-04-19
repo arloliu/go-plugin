@@ -1,6 +1,9 @@
 // Copyright IBM Corp. 2016, 2025
 // SPDX-License-Identifier: MPL-2.0
 
+// Package cmdrunner implements the default runner.Runner: it launches plugins
+// as exec.Cmd subprocesses, forwards stdio, and supports reattaching to an
+// already-running plugin by PID.
 package cmdrunner
 
 import (
@@ -10,6 +13,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 
 	"github.com/arloliu/go-plugin/runner"
 	"github.com/hashicorp/go-hclog"
@@ -144,7 +148,7 @@ func (c *CmdRunner) Name() string {
 }
 
 func (c *CmdRunner) ID() string {
-	return fmt.Sprintf("%d", c.pid)
+	return strconv.Itoa(c.pid)
 }
 
 // peTypes is a list of Portable Executable (PE) machine types from https://learn.microsoft.com/en-us/windows/win32/debug/pe-format

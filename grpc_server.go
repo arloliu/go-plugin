@@ -66,7 +66,7 @@ type GRPCServer struct {
 	muxer *grpcmux.GRPCServerMuxer
 }
 
-// ServerProtocol impl.
+// Init implements ServerProtocol.
 func (s *GRPCServer) Init() error {
 	// Create our server
 	var opts []grpc.ServerOption
@@ -106,7 +106,7 @@ func (s *GRPCServer) Init() error {
 		}
 
 		if err := p.GRPCServer(s.broker, s.server); err != nil {
-			return fmt.Errorf("error registering %q: %s", k, err)
+			return fmt.Errorf("error registering %q: %w", k, err)
 		}
 	}
 

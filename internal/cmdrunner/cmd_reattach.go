@@ -5,9 +5,9 @@ package cmdrunner
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"os"
+	"strconv"
 
 	"github.com/arloliu/go-plugin/runner"
 )
@@ -58,5 +58,5 @@ func (c *CmdAttachedRunner) Kill(_ context.Context) error {
 }
 
 func (c *CmdAttachedRunner) ID() string {
-	return fmt.Sprintf("%d", c.pid)
+	return strconv.Itoa(c.pid)
 }

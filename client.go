@@ -32,10 +32,9 @@ import (
 	"google.golang.org/grpc"
 )
 
-// If this is 1, then we've called CleanupClients. This can be used
-// by plugin RPC implementations to change error behavior since you
-// can expected network connection errors at this point. This should be
-// read by using sync/atomic.
+// Killed is set to 1 after CleanupClients has been called. Plugin RPC
+// implementations may read this (using sync/atomic) to adjust error behaviour
+// because network connection errors are expected during shutdown.
 var Killed uint32 = 0
 
 // This is a slice of the "managed" clients which are cleaned up when
@@ -344,7 +343,7 @@ type ReattachConfig struct {
 	// At least one of Pid or ReattachFunc must be set.
 	ReattachFunc runner.ReattachFunc
 
-	// Test is set to true if this is reattaching to to a plugin in "test mode"
+	// Test is set to true if this is reattaching to a plugin in "test mode"
 	// (see ServeConfig.Test). In this mode, client.Kill will NOT kill the
 	// process and instead will rely on the plugin to terminate itself. This
 	// should not be used in non-test environments.
@@ -407,9 +406,9 @@ func removeManagedClient(c *Client) {
 	}
 }
 
-// This makes sure all the managed subprocesses are killed and properly
-// logged. This should be called before the parent process running the
-// plugins exits.
+// CleanupClients ensures all managed subprocesses are killed and properly
+// logged. It should be called before the parent process running the plugins
+// exits.
 //
 // This must only be called _once_.
 func CleanupClients() {
@@ -487,7 +486,7 @@ func NewClient(config *ClientConfig) (c *Client) {
 		managedClientsLock.Unlock()
 	}
 
-	return
+	return c
 }
 
 // Client returns the protocol client for this connection.
@@ -525,7 +524,7 @@ func (c *Client) Client() (ClientProtocol, error) {
 	return c.client, nil
 }
 
-// Tells whether or not the underlying process has exited.
+// Exited reports whether the underlying plugin process has exited.
 func (c *Client) Exited() bool {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -540,8 +539,8 @@ func (c *Client) killed() bool {
 	return c.processKilled
 }
 
-// End the executing subprocess (if it is running) and perform any cleanup
-// tasks necessary such as capturing any remaining logs and so on.
+// Kill ends the executing subprocess (if it is running) and performs any
+// cleanup tasks necessary such as capturing any remaining logs and so on.
 //
 // This method blocks until the process successfully exits.
 //
@@ -663,7 +662,7 @@ func (c *Client) Start() (addr net.Addr, err error) {
 			mutuallyExclusiveOptions += 1
 		}
 		if mutuallyExclusiveOptions != 1 {
-			return nil, fmt.Errorf("exactly one of Cmd, or Reattach, or RunnerFunc must be set")
+			return nil, errors.New("exactly one of Cmd, or Reattach, or RunnerFunc must be set")
 		}
 
 		if c.config.SecureConfig != nil && c.config.Reattach != nil {
@@ -671,7 +670,7 @@ func (c *Client) Start() (addr net.Addr, err error) {
 		}
 
 		if c.config.GRPCBrokerMultiplex && c.config.Reattach != nil {
-			return nil, fmt.Errorf("gRPC broker multiplexing is not supported with Reattach config")
+			return nil, errors.New("gRPC broker multiplexing is not supported with Reattach config")
 		}
 	}
 
@@ -702,10 +701,10 @@ func (c *Client) Start() (addr net.Addr, err error) {
 		fmt.Sprintf("%s=%s", c.config.MagicCookieKey, c.config.MagicCookieValue),
 		fmt.Sprintf("PLUGIN_MIN_PORT=%d", c.config.MinPort),
 		fmt.Sprintf("PLUGIN_MAX_PORT=%d", c.config.MaxPort),
-		fmt.Sprintf("PLUGIN_PROTOCOL_VERSIONS=%s", strings.Join(versionStrings, ",")),
+		"PLUGIN_PROTOCOL_VERSIONS=" + strings.Join(versionStrings, ","),
 	}
 	if c.config.GRPCBrokerMultiplex {
-		env = append(env, fmt.Sprintf("%s=true", envMultiplexGRPC))
+		env = append(env, envMultiplexGRPC+"=true")
 	}
 
 	cmd := c.config.Cmd
@@ -723,7 +722,7 @@ func (c *Client) Start() (addr net.Addr, err error) {
 
 	if c.config.SecureConfig != nil {
 		if ok, err := c.config.SecureConfig.Check(cmd.Path); err != nil {
-			return nil, fmt.Errorf("error verifying checksum: %s", err)
+			return nil, fmt.Errorf("error verifying checksum: %w", err)
 		} else if !ok {
 			return nil, ErrChecksumsDoNotMatch
 		}
@@ -911,7 +910,7 @@ func (c *Client) Start() (addr net.Addr, err error) {
 		line = strings.TrimSpace(line)
 		parts := strings.Split(line, "|")
 		if len(parts) < 4 {
-			errText := fmt.Sprintf("Unrecognized remote plugin message: %s", line)
+			errText := "Unrecognized remote plugin message: " + line
 			if !ok {
 				errText += "\n" + "Failed to read any lines from plugin's stdout"
 			}
@@ -920,7 +919,7 @@ func (c *Client) Start() (addr net.Addr, err error) {
 				errText += "\n" + additionalNotes
 			}
 			err = errors.New(errText)
-			return
+			return nil, err
 		}
 
 		// Check the core protocol. Wrapped in a {} for scoping.
@@ -928,16 +927,14 @@ func (c *Client) Start() (addr net.Addr, err error) {
 			var coreProtocol int
 			coreProtocol, err = strconv.Atoi(parts[0])
 			if err != nil {
-				err = fmt.Errorf("error parsing core protocol version: %s", err)
-				return
+				return nil, fmt.Errorf("error parsing core protocol version: %w", err)
 			}
 
 			if coreProtocol != CoreProtocolVersion {
-				err = fmt.Errorf("incompatible core API version with plugin. "+
+				return nil, fmt.Errorf("incompatible core API version with plugin. "+
 					"Plugin version: %s, Core version: %d\n\n"+
 					"To fix this, the plugin usually only needs to be recompiled.\n"+
 					"Please report this to the plugin author", parts[0], CoreProtocolVersion)
-				return
 			}
 		}
 
@@ -994,7 +991,7 @@ func (c *Client) Start() (addr net.Addr, err error) {
 		if len(parts) >= 6 && len(parts[5]) > 50 {
 			err := c.loadServerCert(parts[5])
 			if err != nil {
-				return nil, fmt.Errorf("error parsing server cert: %s", err)
+				return nil, fmt.Errorf("error parsing server cert: %w", err)
 			}
 		}
 
@@ -1012,7 +1009,8 @@ func (c *Client) Start() (addr net.Addr, err error) {
 	}
 
 	c.address = addr
-	return
+	// err may be non-nil if the timeout/doneCtx case of the select above fired.
+	return addr, err
 }
 
 // loadServerCert is used by AutoMTLS to read an x.509 cert returned by the
@@ -1025,7 +1023,7 @@ func (c *Client) loadServerCert(cert string) error {
 		return err
 	}
 
-	x509Cert, err := x509.ParseCertificate([]byte(asn1))
+	x509Cert, err := x509.ParseCertificate(asn1)
 	if err != nil {
 		return err
 	}
@@ -1099,7 +1097,7 @@ func (c *Client) reattach() (net.Addr, error) {
 func (c *Client) checkProtoVersion(protoVersion string) (int, PluginSet, error) {
 	serverVersion, err := strconv.Atoi(protoVersion)
 	if err != nil {
-		return 0, nil, fmt.Errorf("Error parsing protocol version %q: %s", protoVersion, err)
+		return 0, nil, fmt.Errorf("error parsing protocol version %q: %w", protoVersion, err)
 	}
 
 	// record these for the error message
@@ -1259,10 +1257,9 @@ func (c *Client) logStderr(name string, r io.Reader) {
 	var inPanic bool
 
 	for {
-
 		line, isPrefix, err := reader.ReadLine()
 		switch {
-		case err == io.EOF:
+		case errors.Is(err, io.EOF):
 			return
 		case err != nil:
 			l.Error("reading plugin stderr", "error", err)

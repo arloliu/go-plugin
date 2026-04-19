@@ -1,6 +1,10 @@
 // Copyright IBM Corp. 2016, 2025
 // SPDX-License-Identifier: MPL-2.0
 
+// Package runner defines the Runner interface used by go-plugin to launch and
+// communicate with plugin subprocesses. Implementations abstract the plugin
+// launch mechanism so hosts can inject alternative launchers (e.g., containers,
+// remote runners) without changing the plugin protocol.
 package runner
 
 import (
@@ -8,7 +12,7 @@ import (
 	"io"
 )
 
-// Runner defines the interface required by go-plugin to manage the lifecycle of
+// Runner defines the interface required by go-plugin to manage the lifecycle
 // of a plugin and attempt to negotiate a connection with it. Note that this
 // is orthogonal to the protocol and transport used, which is negotiated over stdout.
 type Runner interface {

@@ -5,6 +5,7 @@ package plugin
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -62,7 +63,7 @@ func (m *MuxBroker) Accept(id uint32) (net.Conn, error) {
 		defer m.Unlock()
 		delete(m.streams, id)
 
-		return nil, fmt.Errorf("timeout waiting for accept")
+		return nil, errors.New("timeout waiting for accept")
 	}
 
 	// Ack our connection

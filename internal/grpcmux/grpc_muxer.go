@@ -1,6 +1,9 @@
 // Copyright IBM Corp. 2016, 2025
 // SPDX-License-Identifier: MPL-2.0
 
+// Package grpcmux multiplexes a single net.Listener into multiple virtual
+// listeners, keyed by broker stream ID, so GRPCBroker can open additional
+// gRPC connections over a single underlying transport.
 package grpcmux
 
 import (

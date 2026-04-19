@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"io"
 
 	"github.com/arloliu/go-plugin/internal/plugin"
@@ -134,11 +135,11 @@ func (c *grpcStdioClient) Run(stdout, stderr io.Writer) {
 		c.log.Trace("waiting for stdio data")
 		data, err := c.stdioClient.Recv()
 		if err != nil {
-			if err == io.EOF ||
+			if errors.Is(err, io.EOF) ||
 				status.Code(err) == codes.Unavailable ||
 				status.Code(err) == codes.Canceled ||
 				status.Code(err) == codes.Unimplemented ||
-				err == context.Canceled {
+				errors.Is(err, context.Canceled) {
 				c.log.Debug("received EOF, stopping recv loop", "err", err)
 				return
 			}

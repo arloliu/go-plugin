@@ -4,6 +4,7 @@
 package plugin
 
 import (
+	"errors"
 	"io"
 )
 
@@ -19,7 +20,7 @@ func copyStream(name string, dst io.Writer, src io.Reader) {
 		libLog().Error("stream copy aborted: dst is nil", "stream", name)
 		return
 	}
-	if _, err := io.Copy(dst, src); err != nil && err != io.EOF {
+	if _, err := io.Copy(dst, src); err != nil && !errors.Is(err, io.EOF) {
 		libLog().Error("stream copy error", "stream", name, "error", err)
 	}
 }

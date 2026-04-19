@@ -45,6 +45,5 @@ func TestAdditionalNotesAboutCommand(t *testing.T) {
 		if strings.Contains(file, "386") && !strings.Contains(notes, "386") {
 			t.Errorf("Expected notes to contain 386 information:\n%s", notes)
 		}
-
 	}
 }

@@ -520,7 +520,8 @@ func (b *GRPCBroker) muxDial(id uint32) func(context.Context, string) (net.Conn,
 // Dial opens a connection by ID.
 func (b *GRPCBroker) Dial(id uint32) (conn *grpc.ClientConn, err error) { return b.DialWithOptions(id) }
 
-// Dial opens a connection by ID with options.
+// DialWithOptions opens a connection by ID, forwarding the given grpc.DialOption
+// values through to the underlying dialer.
 func (b *GRPCBroker) DialWithOptions(id uint32, opts ...grpc.DialOption) (conn *grpc.ClientConn, err error) {
 	if b.muxer.Enabled() {
 		return dialGRPCConn(b.tls, b.muxDial(id), opts...)
@@ -534,7 +535,7 @@ func (b *GRPCBroker) DialWithOptions(id uint32, opts ...grpc.DialOption) (conn *
 	case c = <-p.ch:
 		close(p.doneCh)
 	case <-time.After(BrokerTimeout):
-		return nil, fmt.Errorf("timeout waiting for connection info")
+		return nil, errors.New("timeout waiting for connection info")
 	}
 
 	network, address := c.Network, c.Address
@@ -566,8 +567,8 @@ func (b *GRPCBroker) DialWithOptions(id uint32, opts ...grpc.DialOption) (conn *
 // It is possible for very long-running plugin hosts to wrap this value,
 // though it would require a very large amount of calls. In practice
 // we've never seen it happen.
-func (m *GRPCBroker) NextId() uint32 {
-	return atomic.AddUint32(&m.nextId, 1)
+func (b *GRPCBroker) NextId() uint32 {
+	return atomic.AddUint32(&b.nextId, 1)
 }
 
 // Run starts the brokering and should be executed in a goroutine, since it
@@ -575,9 +576,9 @@ func (m *GRPCBroker) NextId() uint32 {
 //
 // Uses of GRPCBroker never need to call this. It is called internally by
 // the plugin host/client.
-func (m *GRPCBroker) Run() {
+func (b *GRPCBroker) Run() {
 	for {
-		msg, err := m.streamer.Recv()
+		msg, err := b.streamer.Recv()
 		if err != nil {
 			// Once we receive an error, just exit
 			break
@@ -586,12 +587,12 @@ func (m *GRPCBroker) Run() {
 		// Initialize the waiter
 		var p *gRPCBrokerPending
 		if msg.Knock != nil && msg.Knock.Knock && !msg.Knock.Ack {
-			p = m.getServerStream(msg.ServiceId)
+			p = b.getServerStream(msg.ServiceId)
 			// The server side doesn't close the channel immediately as it needs
 			// to continuously listen for knocks.
 		} else {
-			p = m.getClientStream(msg.ServiceId)
-			go m.timeoutWait(msg.ServiceId, p)
+			p = b.getClientStream(msg.ServiceId)
+			go b.timeoutWait(msg.ServiceId, p)
 		}
 		select {
 		case p.ch <- msg:
@@ -602,41 +603,41 @@ func (m *GRPCBroker) Run() {
 
 // getClientStream is a buffer to receive new connection info and knock acks
 // by stream ID.
-func (m *GRPCBroker) getClientStream(id uint32) *gRPCBrokerPending {
-	m.Lock()
-	defer m.Unlock()
+func (b *GRPCBroker) getClientStream(id uint32) *gRPCBrokerPending {
+	b.Lock()
+	defer b.Unlock()
 
-	p, ok := m.clientStreams[id]
+	p, ok := b.clientStreams[id]
 	if ok {
 		return p
 	}
 
-	m.clientStreams[id] = &gRPCBrokerPending{
+	b.clientStreams[id] = &gRPCBrokerPending{
 		ch:     make(chan *plugin.ConnInfo, 1),
 		doneCh: make(chan struct{}),
 	}
-	return m.clientStreams[id]
+	return b.clientStreams[id]
 }
 
 // getServerStream is a buffer to receive knocks to a multiplexed stream ID
 // that its side is listening on. Not used unless multiplexing is enabled.
-func (m *GRPCBroker) getServerStream(id uint32) *gRPCBrokerPending {
-	m.Lock()
-	defer m.Unlock()
+func (b *GRPCBroker) getServerStream(id uint32) *gRPCBrokerPending {
+	b.Lock()
+	defer b.Unlock()
 
-	p, ok := m.serverStreams[id]
+	p, ok := b.serverStreams[id]
 	if ok {
 		return p
 	}
 
-	m.serverStreams[id] = &gRPCBrokerPending{
+	b.serverStreams[id] = &gRPCBrokerPending{
 		ch:     make(chan *plugin.ConnInfo, 1),
 		doneCh: make(chan struct{}),
 	}
-	return m.serverStreams[id]
+	return b.serverStreams[id]
 }
 
-func (m *GRPCBroker) timeoutWait(id uint32, p *gRPCBrokerPending) {
+func (b *GRPCBroker) timeoutWait(id uint32, p *gRPCBrokerPending) {
 	// Wait for the stream to either be picked up and connected, or
 	// for a timeout.
 	select {
@@ -644,9 +645,9 @@ func (m *GRPCBroker) timeoutWait(id uint32, p *gRPCBrokerPending) {
 	case <-time.After(BrokerTimeout):
 	}
 
-	m.Lock()
-	defer m.Unlock()
+	b.Lock()
+	defer b.Unlock()
 
 	// Delete the stream so no one else can grab it
-	delete(m.clientStreams, id)
+	delete(b.clientStreams, id)
 }

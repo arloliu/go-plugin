@@ -371,6 +371,7 @@ func TestClient_grpcSyncStdio(t *testing.T) {
 }
 
 func testClient_grpcSyncStdio(t *testing.T, useRunnerFunc bool) {
+	t.Helper()
 	var syncOut, syncErr safeBuffer
 
 	process := helperProcess("test-grpc")
@@ -599,6 +600,7 @@ func TestClient_reattachGRPC(t *testing.T) {
 }
 
 func testClient_reattachGRPC(t *testing.T, useReattachFunc bool) {
+	t.Helper()
 	process := helperProcess("test-grpc")
 	c := NewClient(&ClientConfig{
 		Cmd:              process,
@@ -696,7 +698,7 @@ func TestClient_reattachNotFound(t *testing.T) {
 
 	if _, err := c.Start(); err == nil {
 		t.Fatal("should error")
-	} else if err != ErrProcessNotFound {
+	} else if !errors.Is(err, ErrProcessNotFound) {
 		t.Fatalf("err: %s", err)
 	}
 }
@@ -951,7 +953,6 @@ func TestClient_SkipHostEnv(t *testing.T) {
 			}
 
 			for !c.Exited() {
-
 				time.Sleep(50 * time.Millisecond)
 			}
 
@@ -1007,7 +1008,7 @@ func TestClient_SecureConfig(t *testing.T) {
 	// Grab the RPC client, should error
 	_, err := c.Client()
 	c.Kill()
-	if err != ErrChecksumsDoNotMatch {
+	if !errors.Is(err, ErrChecksumsDoNotMatch) {
 		t.Fatalf("err should be %s, got %s", ErrChecksumsDoNotMatch, err)
 	}
 
@@ -1183,7 +1184,7 @@ func TestClient_secureConfigAndReattach(t *testing.T) {
 	defer c.Kill()
 
 	_, err := c.Start()
-	if err != ErrSecureConfigAndReattach {
+	if !errors.Is(err, ErrSecureConfigAndReattach) {
 		t.Fatalf("err should not be %s, got %s", ErrSecureConfigAndReattach, err)
 	}
 }
@@ -1230,7 +1231,6 @@ func TestClient_wrongVersion(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected incorrect protocol version server")
 	}
-
 }
 
 func TestClient_legacyClient(t *testing.T) {
@@ -1448,6 +1448,7 @@ func TestClient_logger(t *testing.T) {
 }
 
 func testClient_logger(t *testing.T, proto string) {
+	t.Helper()
 	var buffer bytes.Buffer
 	mutex := new(sync.Mutex)
 	stderr := io.MultiWriter(os.Stderr, &buffer)

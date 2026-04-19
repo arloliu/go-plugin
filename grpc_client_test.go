@@ -23,6 +23,7 @@ func TestGRPC_App(t *testing.T) {
 }
 
 func testGRPCClientApp(t *testing.T, multiplex bool) {
+	t.Helper()
 	client, server := TestPluginGRPCConn(t, multiplex, map[string]Plugin{
 		"test": new(testGRPCInterfacePlugin),
 	})
@@ -76,6 +77,7 @@ func TestGRPCC_Stream(t *testing.T) {
 }
 
 func testGRPCStream(t *testing.T, multiplex bool) {
+	t.Helper()
 	client, server := TestPluginGRPCConn(t, multiplex, map[string]Plugin{
 		"test": new(testGRPCInterfacePlugin),
 	})
@@ -113,6 +115,7 @@ func TestGRPC_Ping(t *testing.T) {
 }
 
 func testGRPCClientPing(t *testing.T, multiplex bool) {
+	t.Helper()
 	client, server := TestPluginGRPCConn(t, multiplex, map[string]Plugin{
 		"test": new(testGRPCInterfacePlugin),
 	})
@@ -146,6 +149,7 @@ func TestGRPC_Reflection(t *testing.T) {
 }
 
 func testGRPCClientReflection(t *testing.T, multiplex bool) {
+	t.Helper()
 	ctx := context.Background()
 
 	client, server := TestPluginGRPCConn(t, multiplex, map[string]Plugin{

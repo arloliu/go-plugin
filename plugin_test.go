@@ -309,7 +309,7 @@ func (s testGRPCServer) Stream(stream grpctest.Test_StreamServer) error {
 	for {
 		req, err := stream.Recv()
 		if err != nil {
-			if err != io.EOF {
+			if !errors.Is(err, io.EOF) {
 				return err
 			}
 			return nil
@@ -395,11 +395,11 @@ func (c *testGRPCClient) Bidirectional() error {
 
 // Stream sends a series of requests from [start, stop) using a bidirectional
 // streaming service, and returns the streamed responses.
-func (impl *testGRPCClient) Stream(start, stop int32) ([]int32, error) {
+func (c *testGRPCClient) Stream(start, stop int32) ([]int32, error) {
 	if stop <= start {
 		return nil, fmt.Errorf("invalid range [%d, %d)", start, stop)
 	}
-	streamClient, err := impl.Client.Stream(context.Background())
+	streamClient, err := c.Client.Stream(context.Background())
 	if err != nil {
 		return nil, err
 	}

@@ -113,7 +113,7 @@ type GRPCClient struct {
 	pingTimeout time.Duration
 }
 
-// ClientProtocol impl.
+// Close implements ClientProtocol.
 func (c *GRPCClient) Close() error {
 	_ = c.broker.Close()
 	// Shutdown is best-effort: the RPC commonly returns "Unavailable" as
@@ -135,7 +135,7 @@ func (c *GRPCClient) effectivePingTimeout() time.Duration {
 	return defaultPingTimeout
 }
 
-// ClientProtocol impl.
+// Dispense implements ClientProtocol.
 func (c *GRPCClient) Dispense(name string) (any, error) {
 	raw, ok := c.Plugins[name]
 	if !ok {
@@ -150,7 +150,7 @@ func (c *GRPCClient) Dispense(name string) (any, error) {
 	return p.GRPCClient(c.doneCtx, c.broker, c.Conn)
 }
 
-// ClientProtocol impl.
+// Ping implements ClientProtocol.
 func (c *GRPCClient) Ping() error {
 	client := grpc_health_v1.NewHealthClient(c.Conn)
 	ctx, cancel := context.WithTimeout(context.Background(), c.effectivePingTimeout())
