@@ -46,11 +46,11 @@ type KVPlugin struct {
 	Impl KV
 }
 
-func (p *KVPlugin) Server(*plugin.MuxBroker) (interface{}, error) {
+func (p *KVPlugin) Server(*plugin.MuxBroker) (any, error) {
 	return &RPCServer{Impl: p.Impl}, nil
 }
 
-func (*KVPlugin) Client(b *plugin.MuxBroker, c *rpc.Client) (interface{}, error) {
+func (*KVPlugin) Client(b *plugin.MuxBroker, c *rpc.Client) (any, error) {
 	return &RPCClient{client: c}, nil
 }
 
@@ -68,6 +68,6 @@ func (p *KVGRPCPlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) err
 	return nil
 }
 
-func (p *KVGRPCPlugin) GRPCClient(ctx context.Context, broker *plugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
+func (p *KVGRPCPlugin) GRPCClient(ctx context.Context, broker *plugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
 	return &GRPCClient{client: proto.NewKVClient(c)}, nil
 }

@@ -14,9 +14,9 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/arloliu/go-plugin/internal/cmdrunner"
 	"github.com/arloliu/go-plugin/runner"
+	"github.com/hashicorp/go-hclog"
 )
 
 func TestSetGroup(t *testing.T) {

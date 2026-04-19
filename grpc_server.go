@@ -11,9 +11,9 @@ import (
 	"io"
 	"net"
 
-	hclog "github.com/hashicorp/go-hclog"
 	"github.com/arloliu/go-plugin/internal/grpcmux"
 	"github.com/arloliu/go-plugin/internal/plugin"
+	hclog "github.com/hashicorp/go-hclog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/health"

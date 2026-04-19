@@ -136,7 +136,7 @@ func (c *GRPCClient) effectivePingTimeout() time.Duration {
 }
 
 // ClientProtocol impl.
-func (c *GRPCClient) Dispense(name string) (interface{}, error) {
+func (c *GRPCClient) Dispense(name string) (any, error) {
 	raw, ok := c.Plugins[name]
 	if !ok {
 		return nil, fmt.Errorf("unknown plugin type: %s", name)

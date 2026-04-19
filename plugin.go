@@ -24,11 +24,11 @@ import (
 type Plugin interface {
 	// Server should return the RPC server compatible struct to serve
 	// the methods that the Client calls over net/rpc.
-	Server(*MuxBroker) (interface{}, error)
+	Server(*MuxBroker) (any, error)
 
 	// Client returns an interface implementation for the plugin you're
 	// serving that communicates to the server end of the plugin.
-	Client(*MuxBroker, *rpc.Client) (interface{}, error)
+	Client(*MuxBroker, *rpc.Client) (any, error)
 }
 
 // GRPCPlugin is the interface that is implemented to serve/connect to
@@ -42,7 +42,7 @@ type GRPCPlugin interface {
 	// GRPCClient should return the interface implementation for the plugin
 	// you're serving via gRPC. The provided context will be canceled by
 	// go-plugin in the event of the plugin process exiting.
-	GRPCClient(context.Context, *GRPCBroker, *grpc.ClientConn) (interface{}, error)
+	GRPCClient(context.Context, *GRPCBroker, *grpc.ClientConn) (any, error)
 }
 
 // NetRPCUnsupportedPlugin implements Plugin but returns errors for the
@@ -52,10 +52,10 @@ type GRPCPlugin interface {
 // This struct can be embedded in your struct.
 type NetRPCUnsupportedPlugin struct{}
 
-func (p NetRPCUnsupportedPlugin) Server(*MuxBroker) (interface{}, error) {
+func (p NetRPCUnsupportedPlugin) Server(*MuxBroker) (any, error) {
 	return nil, errors.New("net/rpc plugin protocol not supported")
 }
 
-func (p NetRPCUnsupportedPlugin) Client(*MuxBroker, *rpc.Client) (interface{}, error) {
+func (p NetRPCUnsupportedPlugin) Client(*MuxBroker, *rpc.Client) (any, error) {
 	return nil, errors.New("net/rpc plugin protocol not supported")
 }

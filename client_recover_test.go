@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/arloliu/go-plugin/runner"
+	"github.com/hashicorp/go-hclog"
 )
 
 // panicWriter panics on every Write. Used to prove that a misbehaving

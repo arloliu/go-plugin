@@ -12,10 +12,10 @@ type RPCClient struct{ client *rpc.Client }
 
 func (m *RPCClient) Put(key string, value []byte) error {
 	// We don't expect a response, so we can just use interface{}
-	var resp interface{}
+	var resp any
 
 	// The args are just going to be a map. A struct could be better.
-	return m.client.Call("Plugin.Put", map[string]interface{}{
+	return m.client.Call("Plugin.Put", map[string]any{
 		"key":   key,
 		"value": value,
 	}, &resp)
@@ -34,7 +34,7 @@ type RPCServer struct {
 	Impl KV
 }
 
-func (m *RPCServer) Put(args map[string]interface{}, resp *interface{}) error {
+func (m *RPCServer) Put(args map[string]any, resp *any) error {
 	return m.Impl.Put(args["key"].(string), args["value"].([]byte))
 }
 

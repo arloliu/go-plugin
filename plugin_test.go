@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
+	grpctest "github.com/arloliu/go-plugin/test/grpc"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/hashicorp/go-hclog"
-	grpctest "github.com/arloliu/go-plugin/test/grpc"
 	"google.golang.org/grpc"
 )
 
@@ -40,7 +40,7 @@ var testVersionedHandshake = HandshakeConfig{
 // testInterface is the test interface we use for plugins.
 type testInterface interface {
 	Double(int) int
-	PrintKV(string, interface{})
+	PrintKV(string, any)
 	Bidirectional() error
 	PrintStdio(stdout, stderr []byte)
 	Panic(msg string) error
@@ -60,11 +60,11 @@ type testInterfacePlugin struct {
 	Impl testInterface
 }
 
-func (p *testInterfacePlugin) Server(b *MuxBroker) (interface{}, error) {
+func (p *testInterfacePlugin) Server(b *MuxBroker) (any, error) {
 	return &testInterfaceServer{Impl: p.impl()}, nil
 }
 
-func (p *testInterfacePlugin) Client(b *MuxBroker, c *rpc.Client) (interface{}, error) {
+func (p *testInterfacePlugin) Client(b *MuxBroker, c *rpc.Client) (any, error) {
 	return &testInterfaceClient{Client: c}, nil
 }
 
@@ -91,11 +91,11 @@ type testGRPCInterfacePlugin struct {
 	Impl testInterface
 }
 
-func (p *testGRPCInterfacePlugin) Server(b *MuxBroker) (interface{}, error) {
+func (p *testGRPCInterfacePlugin) Server(b *MuxBroker) (any, error) {
 	return &testInterfaceServer{Impl: p.impl()}, nil
 }
 
-func (p *testGRPCInterfacePlugin) Client(b *MuxBroker, c *rpc.Client) (interface{}, error) {
+func (p *testGRPCInterfacePlugin) Client(b *MuxBroker, c *rpc.Client) (any, error) {
 	return &testInterfaceClient{Client: c}, nil
 }
 
@@ -104,7 +104,7 @@ func (p *testGRPCInterfacePlugin) GRPCServer(b *GRPCBroker, s *grpc.Server) erro
 	return nil
 }
 
-func (p *testGRPCInterfacePlugin) GRPCClient(doneCtx context.Context, b *GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
+func (p *testGRPCInterfacePlugin) GRPCClient(doneCtx context.Context, b *GRPCBroker, c *grpc.ClientConn) (any, error) {
 	return &testGRPCClient{broker: b, Client: grpctest.NewTestClient(c)}, nil
 }
 
@@ -131,7 +131,7 @@ type testInterfaceImpl struct {
 
 func (i *testInterfaceImpl) Double(v int) int { return v * 2 }
 
-func (i *testInterfaceImpl) PrintKV(key string, value interface{}) {
+func (i *testInterfaceImpl) PrintKV(key string, value any) {
 	i.logger.Info("PrintKV called", key, value)
 }
 
@@ -170,8 +170,8 @@ func (impl *testInterfaceClient) Double(v int) int {
 	return resp
 }
 
-func (impl *testInterfaceClient) PrintKV(key string, value interface{}) {
-	err := impl.Client.Call("Plugin.PrintKV", map[string]interface{}{
+func (impl *testInterfaceClient) PrintKV(key string, value any) {
+	err := impl.Client.Call("Plugin.PrintKV", map[string]any{
 		"key":   key,
 		"value": value,
 	}, &struct{}{})
@@ -206,7 +206,7 @@ func (s *testInterfaceServer) Double(arg int, resp *int) error {
 	return nil
 }
 
-func (s *testInterfaceServer) PrintKV(args map[string]interface{}, _ *struct{}) error {
+func (s *testInterfaceServer) PrintKV(args map[string]any, _ *struct{}) error {
 	s.Impl.PrintKV(args["key"].(string), args["value"])
 	return nil
 }
@@ -239,7 +239,7 @@ func (s *testGRPCServer) Double(
 func (s *testGRPCServer) PrintKV(
 	ctx context.Context,
 	req *grpctest.PrintKVRequest) (*grpctest.PrintKVResponse, error) {
-	var v interface{}
+	var v any
 	switch rv := req.Value.(type) {
 	case *grpctest.PrintKVRequest_ValueString:
 		v = rv.ValueString
@@ -339,7 +339,7 @@ func (c *testGRPCClient) Double(v int) int {
 	return int(resp.Output)
 }
 
-func (c *testGRPCClient) PrintKV(key string, value interface{}) {
+func (c *testGRPCClient) PrintKV(key string, value any) {
 	req := &grpctest.PrintKVRequest{Key: key}
 	switch v := value.(type) {
 	case string:

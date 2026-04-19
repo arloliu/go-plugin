@@ -111,14 +111,14 @@ func TestSetInternalLogger_ConcurrentSwapRaceClean(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 200; i++ {
+		for range 200 {
 			SetInternalLogger(l1)
 			SetInternalLogger(l2)
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 200; i++ {
+		for range 200 {
 			_ = libLog() // read
 		}
 	}()

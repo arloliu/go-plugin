@@ -16,12 +16,13 @@ import (
 	"os/signal"
 	"os/user"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 
-	hclog "github.com/hashicorp/go-hclog"
 	"github.com/arloliu/go-plugin/internal/grpcmux"
+	hclog "github.com/hashicorp/go-hclog"
 	"google.golang.org/grpc"
 )
 
@@ -152,7 +153,7 @@ func protocolVersion(opts *ServeConfig) (int, Protocol, PluginSet) {
 	// Check if the client sent a list of acceptable versions
 	var clientVersions []int
 	if vs := os.Getenv("PLUGIN_PROTOCOL_VERSIONS"); vs != "" {
-		for _, s := range strings.Split(vs, ",") {
+		for s := range strings.SplitSeq(vs, ",") {
 			v, err := strconv.Atoi(s)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "server sent invalid plugin version %q", s)
@@ -205,10 +206,8 @@ func protocolVersion(opts *ServeConfig) (int, Protocol, PluginSet) {
 			}
 		}
 
-		for _, clientVersion := range clientVersions {
-			if clientVersion == protoVersion {
-				return protoVersion, protoType, pluginSet
-			}
+		if slices.Contains(clientVersions, protoVersion) {
+			return protoVersion, protoType, pluginSet
 		}
 	}
 

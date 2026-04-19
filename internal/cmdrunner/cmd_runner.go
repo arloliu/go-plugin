@@ -11,8 +11,8 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/arloliu/go-plugin/runner"
+	"github.com/hashicorp/go-hclog"
 )
 
 var (

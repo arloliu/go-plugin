@@ -197,7 +197,7 @@ func (d *dispenseServer) Dispense(
 	return nil
 }
 
-func serve(conn io.ReadWriteCloser, name string, v interface{}) {
+func serve(conn io.ReadWriteCloser, name string, v any) {
 	server := rpc.NewServer()
 	if err := server.RegisterName(name, v); err != nil {
 		libLog().Error("plugin register error", "name", name, "error", err)

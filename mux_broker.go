@@ -79,7 +79,7 @@ func (m *MuxBroker) Accept(id uint32) (net.Conn, error) {
 // complex arguments.
 //
 // The served interface is always registered to the "Plugin" name.
-func (m *MuxBroker) AcceptAndServe(id uint32, v interface{}) {
+func (m *MuxBroker) AcceptAndServe(id uint32, v any) {
 	conn, err := m.Accept(id)
 	if err != nil {
 		libLog().Error("plugin acceptAndServe error", "error", err)

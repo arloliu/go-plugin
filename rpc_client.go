@@ -149,7 +149,7 @@ func (c *RPCClient) Close() error {
 	return returnErr
 }
 
-func (c *RPCClient) Dispense(name string) (interface{}, error) {
+func (c *RPCClient) Dispense(name string) (any, error) {
 	p, ok := c.plugins[name]
 	if !ok {
 		return nil, fmt.Errorf("unknown plugin type: %s", name)

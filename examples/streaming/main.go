@@ -10,9 +10,9 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/arloliu/go-plugin"
 	"github.com/arloliu/go-plugin/examples/streaming/shared"
+	"github.com/hashicorp/go-hclog"
 	"google.golang.org/grpc"
 )
 

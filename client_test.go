@@ -21,9 +21,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/arloliu/go-plugin/internal/cmdrunner"
 	"github.com/arloliu/go-plugin/runner"
+	"github.com/hashicorp/go-hclog"
 )
 
 func TestClient(t *testing.T) {
@@ -1589,7 +1589,7 @@ func TestServerLogPanic(t *testing.T) {
 	panicFound := false
 	stackLines := 0
 
-	for _, line := range strings.Split(buffer.String(), "\n") {
+	for line := range strings.SplitSeq(buffer.String(), "\n") {
 		if strings.Contains(line, "[ERROR] test-logger.go-plugin.test: panic: invalid foo bar") {
 			panicFound = true
 			continue
@@ -1685,7 +1685,7 @@ func TestClient_logStderrParseJSON(t *testing.T) {
 	}
 
 	for i, tt := range wants {
-		l := make(map[string]interface{})
+		l := make(map[string]any)
 		if err := json.Unmarshal([]byte(logs[i]), &l); err != nil {
 			t.Fatal(err)
 		}
@@ -1705,7 +1705,7 @@ type trackingLogger struct {
 	errorLogs []string
 }
 
-func (l *trackingLogger) Error(msg string, args ...interface{}) {
+func (l *trackingLogger) Error(msg string, args ...any) {
 	l.errorLogs = append(l.errorLogs, fmt.Sprintf("%s: %v", msg, args))
 	l.Logger.Error(msg, args...)
 }

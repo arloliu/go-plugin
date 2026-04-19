@@ -83,7 +83,7 @@ func (p *StreamerPlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) e
 	return nil
 }
 
-func (p *StreamerPlugin) GRPCClient(ctx context.Context, broker *plugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
+func (p *StreamerPlugin) GRPCClient(ctx context.Context, broker *plugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
 	return &StreamerGRPCClient{
 		client: proto.NewStreamerServiceClient(c),
 	}, nil
