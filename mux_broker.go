@@ -30,7 +30,7 @@ import (
 // new multiplexed streams. This is useful for complex args and return values,
 // or anything else you might need a data stream for.
 type MuxBroker struct {
-	nextId  uint32
+	nextID  uint32
 	session *yamux.Session
 	streams map[uint32]*muxBrokerPending
 
@@ -129,7 +129,7 @@ func (m *MuxBroker) Dial(id uint32) (net.Conn, error) {
 // though it would require a very large amount of RPC calls. In practice
 // we've never seen it happen.
 func (m *MuxBroker) NextId() uint32 {
-	return atomic.AddUint32(&m.nextId, 1)
+	return atomic.AddUint32(&m.nextID, 1)
 }
 
 // Run starts the brokering and should be executed in a goroutine, since it

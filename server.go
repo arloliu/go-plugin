@@ -343,13 +343,13 @@ func Serve(opts *ServeConfig) {
 
 	// Create our new stdout, stderr files. These will override our built-in
 	// stdout/stderr so that it works across the stream boundary.
-	var stdout_r, stderr_r io.Reader
-	stdout_r, stdout_w, err := os.Pipe()
+	var stdoutR, stderrR io.Reader
+	stdoutR, stdoutW, err := os.Pipe()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error preparing plugin: %s\n", err)
 		os.Exit(1)
 	}
-	stderr_r, stderr_w, err := os.Pipe()
+	stderrR, stderrW, err := os.Pipe()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error preparing plugin: %s\n", err)
 		os.Exit(1)
@@ -364,8 +364,8 @@ func Serve(opts *ServeConfig) {
 		// TODO(mitchellh): This isn't super ideal because a TeeReader
 		// only works if the reader side is actively read. If we never
 		// connect via a plugin client, the output still gets swallowed.
-		stdout_r = io.TeeReader(stdout_r, os.Stdout)
-		stderr_r = io.TeeReader(stderr_r, os.Stderr)
+		stdoutR = io.TeeReader(stdoutR, os.Stdout)
+		stderrR = io.TeeReader(stderrR, os.Stderr)
 	}
 
 	// Build the server type
@@ -381,8 +381,8 @@ func Serve(opts *ServeConfig) {
 		// Create the RPC server to dispense
 		server = &RPCServer{
 			Plugins: pluginSet,
-			Stdout:  stdout_r,
-			Stderr:  stderr_r,
+			Stdout:  stdoutR,
+			Stderr:  stderrR,
 			DoneCh:  doneCh,
 		}
 
@@ -399,8 +399,8 @@ func Serve(opts *ServeConfig) {
 			Plugins: pluginSet,
 			Server:  opts.GRPCServer,
 			TLS:     tlsConfig,
-			Stdout:  stdout_r,
-			Stderr:  stderr_r,
+			Stdout:  stdoutR,
+			Stderr:  stderrR,
 			DoneCh:  doneCh,
 			logger:  logger,
 			muxer:   muxer,
@@ -489,8 +489,8 @@ func Serve(opts *ServeConfig) {
 				os.Stderr = err
 			}(os.Stdout, os.Stderr)
 		}
-		os.Stdout = stdout_w
-		os.Stderr = stderr_w
+		os.Stdout = stdoutW
+		os.Stderr = stderrW
 	}
 
 	// Accept connections and wait for completion
@@ -527,13 +527,13 @@ func Serve(opts *ServeConfig) {
 
 func serverListener(unixSocketCfg UnixSocketConfig) (net.Listener, error) {
 	if runtime.GOOS == "windows" {
-		return serverListener_tcp()
+		return serverListenerTCP()
 	}
 
-	return serverListener_unix(unixSocketCfg)
+	return serverListenerUnix(unixSocketCfg)
 }
 
-func serverListener_tcp() (net.Listener, error) {
+func serverListenerTCP() (net.Listener, error) {
 	envMinPort := os.Getenv("PLUGIN_MIN_PORT")
 	envMaxPort := os.Getenv("PLUGIN_MAX_PORT")
 
@@ -575,7 +575,7 @@ func serverListener_tcp() (net.Listener, error) {
 	return nil, errors.New("couldn't bind plugin TCP listener")
 }
 
-func serverListener_unix(unixSocketCfg UnixSocketConfig) (net.Listener, error) {
+func serverListenerUnix(unixSocketCfg UnixSocketConfig) (net.Listener, error) {
 	tf, err := os.CreateTemp(unixSocketCfg.socketDir, "plugin")
 	if err != nil {
 		return nil, err

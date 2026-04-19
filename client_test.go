@@ -365,12 +365,12 @@ func TestClient_grpcSyncStdio(t *testing.T) {
 		"use RunnerFunc": {true},
 	} {
 		t.Run(name, func(t *testing.T) {
-			testClient_grpcSyncStdio(t, tc.useRunnerFunc)
+			testClientGRPCSyncStdio(t, tc.useRunnerFunc)
 		})
 	}
 }
 
-func testClient_grpcSyncStdio(t *testing.T, useRunnerFunc bool) {
+func testClientGRPCSyncStdio(t *testing.T, useRunnerFunc bool) {
 	t.Helper()
 	var syncOut, syncErr safeBuffer
 
@@ -594,12 +594,12 @@ func TestClient_reattachGRPC(t *testing.T) {
 		"use ReattachFunc": {true},
 	} {
 		t.Run(name, func(t *testing.T) {
-			testClient_reattachGRPC(t, tc.useReattachFunc)
+			testClientReattachGRPC(t, tc.useReattachFunc)
 		})
 	}
 }
 
-func testClient_reattachGRPC(t *testing.T, useReattachFunc bool) {
+func testClientReattachGRPC(t *testing.T, useReattachFunc bool) {
 	t.Helper()
 	process := helperProcess("test-grpc")
 	c := NewClient(&ClientConfig{
@@ -1443,11 +1443,11 @@ func TestClient_mtlsNetRPCClient(t *testing.T) {
 }
 
 func TestClient_logger(t *testing.T) {
-	t.Run("netrpc", func(t *testing.T) { testClient_logger(t, "netrpc") })
-	t.Run("grpc", func(t *testing.T) { testClient_logger(t, "grpc") })
+	t.Run("netrpc", func(t *testing.T) { testClientLogger(t, "netrpc") })
+	t.Run("grpc", func(t *testing.T) { testClientLogger(t, "grpc") })
 }
 
-func testClient_logger(t *testing.T, proto string) {
+func testClientLogger(t *testing.T, proto string) {
 	t.Helper()
 	var buffer bytes.Buffer
 	mutex := new(sync.Mutex)

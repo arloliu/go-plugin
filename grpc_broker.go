@@ -259,7 +259,7 @@ func (s *gRPCBrokerClientImpl) Close() {
 // new streams. This is useful for complex args and return values,
 // or anything else you might need a data stream for.
 type GRPCBroker struct {
-	nextId   uint32
+	nextID   uint32
 	streamer streamer
 	tls      *tls.Config
 	doneCh   chan struct{}
@@ -568,7 +568,7 @@ func (b *GRPCBroker) DialWithOptions(id uint32, opts ...grpc.DialOption) (conn *
 // though it would require a very large amount of calls. In practice
 // we've never seen it happen.
 func (b *GRPCBroker) NextId() uint32 {
-	return atomic.AddUint32(&b.nextId, 1)
+	return atomic.AddUint32(&b.nextID, 1)
 }
 
 // Run starts the brokering and should be executed in a goroutine, since it

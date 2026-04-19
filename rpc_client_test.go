@@ -48,25 +48,25 @@ func TestClient_App(t *testing.T) {
 
 func TestClient_syncStreams(t *testing.T) {
 	// Create streams for the server that we can talk to
-	stdout_r, stdout_w := io.Pipe()
-	stderr_r, stderr_w := io.Pipe()
+	stdoutR, stdoutW := io.Pipe()
+	stderrR, stderrW := io.Pipe()
 
 	client, _ := TestPluginRPCConn(t, map[string]Plugin{}, &TestOptions{
-		ServerStdout: stdout_r,
-		ServerStderr: stderr_r,
+		ServerStdout: stdoutR,
+		ServerStderr: stderrR,
 	})
 
 	// Start the data copying
-	var stdout_out, stderr_out safeBuffer
+	var stdoutOut, stderrOut safeBuffer
 	stdout := &safeBuffer{
 		b: bytes.NewBufferString("stdouttest"),
 	}
 	stderr := &safeBuffer{
 		b: bytes.NewBufferString("stderrtest"),
 	}
-	go func() { _ = client.SyncStreams(&stdout_out, &stderr_out) }()
-	go func() { _, _ = io.Copy(stdout_w, stdout) }()
-	go func() { _, _ = io.Copy(stderr_w, stderr) }()
+	go func() { _ = client.SyncStreams(&stdoutOut, &stderrOut) }()
+	go func() { _, _ = io.Copy(stdoutW, stdout) }()
+	go func() { _, _ = io.Copy(stderrW, stderr) }()
 
 	// Unfortunately I can't think of a better way to make sure all the
 	// copies above go through so let's just exit.
@@ -74,13 +74,13 @@ func TestClient_syncStreams(t *testing.T) {
 
 	// Close everything, and lets test the result
 	_ = client.Close()
-	_ = stdout_w.Close()
-	_ = stderr_w.Close()
+	_ = stdoutW.Close()
+	_ = stderrW.Close()
 
-	if v := stdout_out.String(); v != "stdouttest" {
+	if v := stdoutOut.String(); v != "stdouttest" {
 		t.Fatalf("bad: %q", v)
 	}
-	if v := stderr_out.String(); v != "stderrtest" {
+	if v := stderrOut.String(); v != "stderrtest" {
 		t.Fatalf("bad: %q", v)
 	}
 }
