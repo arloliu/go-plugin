@@ -1,3 +1,26 @@
+## v1.8.0
+
+CHANGES:
+
+* Module path renamed from `github.com/hashicorp/go-plugin` to `github.com/arloliu/go-plugin`.
+
+ENHANCEMENTS:
+
+* client: New `ClientConfig.ShutdownTimeout` to bound the grace window on `Kill` before the plugin process is force-terminated.
+* client: New `ClientConfig.PingTimeout` to bound health-check `Ping()` calls so wedged plugins cannot hang the host.
+* client: New `ClientConfig.DisableProcessGroupKill` opt-out for TTY hosts that need the legacy single-process kill behaviour.
+* client: `GRPCClient.Close` now bounds the underlying `Shutdown` with a timeout, and the gRPC controller prefers `GracefulStop` over `Stop`.
+* plugin: New exported `BrokerTimeout` variable for tuning broker accept/dial timeouts.
+* cmdrunner: On POSIX, the plugin's entire process group is killed on shutdown to avoid orphaned children.
+* plugin: Library-internal `log.Printf` output is now routed through `hclog` instead of the default logger.
+
+BUGS:
+
+* client: Managed clients are now removed from the global slice on `Kill`, preventing a slow leak across plugin restarts.
+* plugin: `getGRPCMuxer` init errors are persisted across calls rather than silently retried.
+* plugin: Panics in the stderr log pump and stdout scanner goroutines are now recovered instead of taking down the host.
+* plugin: Malformed plugin handshake output no longer panics the host process.
+
 ## v1.7.0
 
 CHANGES:
