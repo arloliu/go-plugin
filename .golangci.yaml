@@ -1,0 +1,92 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    # Correctness
+    - errcheck       # Unhandled errors (explicit `_ =` ignores are fine)
+    - govet          # Suspicious constructs (printf, composites, etc.)
+    - ineffassign    # Assignments whose value is never read
+    - staticcheck    # Broad static analysis (SA, ST, QF, S1 checks)
+    - unused         # Exported/unexported symbols that are never used
+
+    # Style and idioms
+    - misspell       # Common English misspellings in comments and strings
+    - revive         # Opinionated but pragmatic Go linter (replaces golint)
+
+    # Security
+    - gosec          # Common security mistakes (subprocess, file paths, crypto)
+
+    # Lint hygiene
+    - nolintlint     # Ensures //nolint directives are valid and documented
+
+  settings:
+    revive:
+      rules:
+        # error-return: error values should be the last return value.
+        - name: error-return
+          severity: warning
+        # NOTE: exported (comment format) and var-naming (NextId/underscore names)
+        # are intentionally omitted. The inherited codebase predates these
+        # conventions; exported symbols like NextId() can't be renamed without
+        # breaking the public API. Address incrementally in new code.
+
+    gosec:
+      excludes:
+        # G204: subprocess launched with a variable — intentional; go-plugin's
+        # entire purpose is to exec plugin binaries supplied by the caller.
+        - G204
+        # G304: file path from variable — intentional for plugin binary discovery.
+        - G304
+        # G115: integer overflow on protocol versions and OS IDs — bounded values,
+        # not a real overflow risk in this context.
+        - G115
+        # G118: context.WithCancel cancel func stored in a struct field (c.ctxCancel)
+        # rather than called at the same call site — false positive.
+        - G118
+
+    staticcheck:
+      checks:
+        - "all"
+        - "-SA1019" # Deprecated API (grpc.Dial); tracked separately for migration
+        - "-ST1000" # Missing package comment — enforce via review for public packages
+        - "-ST1003" # Naming conventions (underscores, Id vs ID); fix incrementally
+        - "-ST1016" # Inconsistent receiver names — cosmetic; inherited from upstream
+        - "-ST1020" # Exported function comment format — enforce via review for new code
+        - "-ST1021" # Exported type comment format — enforce via review for new code
+        - "-ST1022" # Exported var comment format — enforce via review for new code
+
+  exclusions:
+    rules:
+      # Test files: relaxed errcheck (testify assertions), gosec (low-risk context),
+      # and revive (doc format is acceptable in tests).
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+          - revive
+
+      # internal/ packages: relax revive — not public API surface.
+      - path: internal/
+        linters:
+          - revive
+
+      # Generated protobuf files — skip all linting.
+      - path: \.pb\.go$
+        linters:
+          - errcheck
+          - govet
+          - ineffassign
+          - staticcheck
+          - unused
+          - misspell
+          - revive
+          - gosec
+
+    # Example programs are illustrative, not production code.
+    paths:
+      - examples/
+
+formatters:
+  enable:
+    - goimports      # Import grouping and formatting
