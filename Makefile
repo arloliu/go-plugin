@@ -81,3 +81,10 @@ testdata:
 .PHONY: clean
 clean:
 	rm -f $(COVERAGE_OUT)
+
+## update-pkg-cache: Attempt to update the Go module proxy cache for the latest git tag. Not critical, so failure is non-fatal.
+.PHONY: update-pkg-cache
+update-pkg-cache:
+	@echo "Updating package cache with latest git tag: $(LATEST_GIT_TAG)"
+	@curl -sf https://proxy.golang.org/github.com/arloliu/go-plugin/@v/$(LATEST_GIT_TAG).info > /dev/null || \
+		echo "Warning: Failed to update package cache"
