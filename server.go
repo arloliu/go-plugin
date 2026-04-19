@@ -95,7 +95,7 @@ type ServeConfig struct {
 	// launch the plugin in-process and output a ReattachConfig.
 	//
 	// This changes the behavior of the server in a number of ways to
-	// accomodate the expectation of running in-process:
+	// accommodate the expectation of running in-process:
 	//
 	//   * The handshake cookie is not validated.
 	//   * Stdout/stderr will receive plugin reads and writes
