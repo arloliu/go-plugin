@@ -491,6 +491,11 @@ func (b *GRPCBroker) knock(id uint32) error {
 			return fmt.Errorf("failed to knock for id %d: %s", id, msg.Knock.Error)
 		}
 	case <-time.After(BrokerTimeout):
+		// Reap the pending entry — if the ack never arrives, Run() never
+		// spawns a timeoutWait for it and the entry would otherwise leak.
+		b.Lock()
+		delete(b.clientStreams, id)
+		b.Unlock()
 		return fmt.Errorf("%w: multiplexing knock handshake on id %d", ErrBrokerTimeout, id)
 	}
 
@@ -535,6 +540,12 @@ func (b *GRPCBroker) DialWithOptions(id uint32, opts ...grpc.DialOption) (conn *
 	case c = <-p.ch:
 		close(p.doneCh)
 	case <-time.After(BrokerTimeout):
+		// Reap the pending entry ourselves. If no ConnInfo for this id
+		// ever arrives, Run() never starts a timeoutWait for it, so
+		// without this the map entry leaks for the life of the broker.
+		b.Lock()
+		delete(b.clientStreams, id)
+		b.Unlock()
 		return nil, fmt.Errorf("%w: waiting for connection info on id %d", ErrBrokerTimeout, id)
 	}
 

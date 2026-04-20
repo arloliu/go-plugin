@@ -792,6 +792,29 @@ func TestClient_reattachNotFound(t *testing.T) {
 	}
 }
 
+// TestClient_reattachEmptyInvalid verifies Start fails fast with a clear
+// error when ReattachConfig has neither Addr nor ReattachFunc set. Prior
+// to this guard the zero-value config took the default cmdrunner path
+// and eventually failed deep inside net.Dial.
+func TestClient_reattachEmptyInvalid(t *testing.T) {
+	t.Parallel()
+
+	c := NewClient(&ClientConfig{
+		Reattach:        &ReattachConfig{},
+		HandshakeConfig: testHandshake,
+		Plugins:         testPluginMap,
+	})
+	defer c.Kill()
+
+	_, err := c.Start()
+	if err == nil {
+		t.Fatal("expected Start to fail on empty ReattachConfig")
+	}
+	if !strings.Contains(err.Error(), "Addr or ReattachFunc") {
+		t.Fatalf("expected error about missing Addr/ReattachFunc, got: %v", err)
+	}
+}
+
 func TestClientStart_badVersion(t *testing.T) {
 	config := &ClientConfig{
 		Cmd:             helperProcess("bad-version"),

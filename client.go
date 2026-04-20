@@ -697,6 +697,16 @@ func (c *Client) Start() (addr net.Addr, err error) {
 		if c.config.GRPCBrokerMultiplex && c.config.Reattach != nil {
 			return nil, errors.New("gRPC broker multiplexing is not supported with Reattach config")
 		}
+
+		// Fail fast on a ReattachConfig that cannot actually attach to
+		// anything. The default cmdrunner.ReattachFunc needs Addr; a
+		// custom ReattachFunc can source its own address, so either is
+		// sufficient.
+		if c.config.Reattach != nil &&
+			c.config.Reattach.Addr == nil &&
+			c.config.Reattach.ReattachFunc == nil {
+			return nil, errors.New("ReattachConfig requires one of Addr or ReattachFunc to be set")
+		}
 	}
 
 	if c.config.Reattach != nil {
@@ -1143,7 +1153,7 @@ func (c *Client) checkProtoVersion(protoVersion string) (int, PluginSet, error) 
 	}
 
 	return 0, nil, fmt.Errorf("incompatible API version with plugin. "+
-		"Plugin version: %d, Client versions: %d", serverVersion, clientVersions)
+		"Plugin version: %d, Client versions: %v", serverVersion, clientVersions)
 }
 
 // ReattachConfig returns the information that must be provided to NewClient

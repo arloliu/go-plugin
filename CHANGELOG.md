@@ -26,6 +26,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `plugin`: `GRPCBroker.Dial` now reaps its pending `clientStreams` entry
+  when `BrokerTimeout` fires before a `ConnInfo` arrives. Previously the
+  entry was only cleaned up by a `Run()`-spawned goroutine that never
+  ran in this path, producing a slow map leak for long-running hosts
+  whose plugins occasionally fail to send.
+- `plugin`: `GRPCBroker.knock` (multiplexing) now reaps its
+  `clientStreams` entry on timeout for the same reason.
+- `client`: `Start` now validates `ReattachConfig` up front and returns
+  a clear error when neither `Addr` nor `ReattachFunc` is set, instead
+  of panicking in the default cmdrunner reattach path.
+- `client`: Version-mismatch error now formats the client version list
+  with `%v` (e.g. `[1 2]`) instead of `%d`, for clarity.
 - `client`: `Client.Kill` is now gated by `sync.Once` so concurrent callers
   no longer both enter the graceful-shutdown path and double-close the RPC
   client. Previously the lock was released before the shutdown body ran,
