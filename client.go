@@ -70,6 +70,11 @@ var (
 	// rebuilding the plugin, or restarting the plugin with
 	// ClientConfig.GRPCBrokerMultiplex set to false.
 	ErrGRPCBrokerMuxNotSupported = errors.New("client requested gRPC broker multiplexing but plugin does not support the feature")
+
+	// ErrBrokerTimeout is returned when a broker operation (Dial, Accept, or
+	// the internal knock handshake) does not complete within BrokerTimeout.
+	// Callers can use errors.Is to distinguish it from transport errors.
+	ErrBrokerTimeout = errors.New("broker operation timed out")
 )
 
 // defaultPluginLogBufferSize is the default size of the buffer used to read from stderr for plugin log lines.
@@ -115,6 +120,15 @@ type Client struct {
 	// processKilled is used for testing only, to flag when the process was
 	// forcefully killed.
 	processKilled bool
+
+	// killOnce serializes Kill so concurrent callers do not both enter the
+	// graceful-shutdown path and double-close the RPC client.
+	killOnce sync.Once
+
+	// killBodyRuns counts executions of the Kill body. sync.Once guarantees
+	// this is at most 1; tests use it to detect a regression of the gate
+	// without string-matching log output.
+	killBodyRuns atomic.Int32
 
 	unixSocketCfg UnixSocketConfig
 
@@ -544,8 +558,16 @@ func (c *Client) killed() bool {
 //
 // This method blocks until the process successfully exits.
 //
-// This method can safely be called multiple times.
+// This method is safe to call multiple times, including concurrently from
+// multiple goroutines. Subsequent calls are no-ops; concurrent callers block
+// on the first call and then return.
 func (c *Client) Kill() {
+	c.killOnce.Do(c.kill)
+}
+
+func (c *Client) kill() {
+	c.killBodyRuns.Add(1)
+
 	// Grab a lock to read some private fields.
 	c.l.Lock()
 	runner := c.runner
@@ -1078,13 +1100,16 @@ func (c *Client) reattach() (net.Addr, error) {
 		c.protocol = ProtocolNetRPC
 	}
 
-	if c.config.Reattach.Test {
-		c.negotiatedVersion = c.config.Reattach.ProtocolVersion
-	} else {
-		// If we're in test mode, we do NOT set the runner. This avoids the
-		// runner being killed (the only purpose we have for setting c.runner
-		// when reattaching), since in test mode the process is responsible for
-		// exiting on its own.
+	// Reattach does not re-perform the handshake, so adopt the protocol
+	// version the caller declared. Without this, Dispense on a reattached
+	// client would run with negotiatedVersion = 0 and silently mismatch a
+	// plugin that was built against a later version.
+	c.negotiatedVersion = c.config.Reattach.ProtocolVersion
+
+	// In test mode we do NOT set the runner. This avoids the runner being
+	// killed (the only purpose we have for setting c.runner when reattaching),
+	// since in test mode the process is responsible for exiting on its own.
+	if !c.config.Reattach.Test {
 		c.runner = r
 	}
 

@@ -4,6 +4,7 @@
 package plugin
 
 import (
+	"errors"
 	"net"
 	"testing"
 	"time"
@@ -60,6 +61,9 @@ func TestBrokerTimeout_MuxBrokerAcceptRespectsVar(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("expected Accept to time out")
+	}
+	if !errors.Is(err, ErrBrokerTimeout) {
+		t.Fatalf("expected errors.Is(err, ErrBrokerTimeout); got %v", err)
 	}
 	// Allow generous slack above the configured window; the literal
 	// 5s we replaced would make this fail loudly.

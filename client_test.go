@@ -116,6 +116,58 @@ func TestClient_killStart(t *testing.T) {
 	}
 }
 
+// TestClient_killConcurrent verifies Kill is safe to call concurrently from
+// multiple goroutines. Prior to the fix Kill released c.l before its body
+// ran, letting concurrent callers all enter the graceful-shutdown path and
+// redundantly force-kill the subprocess. The sync.Once gate must let the
+// body run at most once no matter how many callers race; killBodyRuns is
+// the direct counter we assert on.
+//
+// We iterate several rounds to reduce the chance a scheduling artifact
+// hides a regression: each round starts a fresh client, releases N racing
+// callers through a barrier, and confirms the counter is exactly 1.
+func TestClient_killConcurrent(t *testing.T) {
+	t.Parallel()
+
+	const rounds = 5
+	const callers = 16
+
+	for round := range rounds {
+		process := helperProcess("test-interface")
+		c := NewClient(&ClientConfig{
+			Cmd:             process,
+			HandshakeConfig: testHandshake,
+			Plugins:         testPluginMap,
+		})
+
+		if _, err := c.Client(); err != nil {
+			c.Kill()
+			t.Fatalf("round %d: err: %s", round, err)
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(callers)
+		start := make(chan struct{})
+		for range callers {
+			go func() {
+				defer wg.Done()
+				<-start
+				c.Kill()
+			}()
+		}
+		close(start)
+		wg.Wait()
+
+		if !c.Exited() {
+			t.Fatalf("round %d: client should be exited after concurrent Kill", round)
+		}
+		if got := c.killBodyRuns.Load(); got != 1 {
+			t.Fatalf("round %d: Kill body ran %d times under %d concurrent callers; want exactly 1",
+				round, got, callers)
+		}
+	}
+}
+
 func TestClient_testCleanup(t *testing.T) {
 	t.Parallel()
 
@@ -523,6 +575,43 @@ func TestClient_reattach(t *testing.T) {
 	if c.killed() {
 		t.Fatal("process failed to exit gracefully")
 	}
+}
+
+// TestClient_reattachNegotiatedVersion verifies a non-test reattach adopts
+// ReattachConfig.ProtocolVersion as the negotiated version. Prior to the
+// fix, reattach left negotiatedVersion at 0, which silently mismatched
+// VersionedPlugins after a plugin rebuild.
+func TestClient_reattachNegotiatedVersion(t *testing.T) {
+	process := helperProcess("test-interface")
+	c := NewClient(&ClientConfig{
+		Cmd:             process,
+		HandshakeConfig: testHandshake,
+		Plugins:         testPluginMap,
+	})
+	defer c.Kill()
+
+	if _, err := c.Client(); err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	reattach := c.ReattachConfig()
+	reattach.ProtocolVersion = 42
+
+	c = NewClient(&ClientConfig{
+		Reattach:        reattach,
+		HandshakeConfig: testHandshake,
+		Plugins:         testPluginMap,
+	})
+
+	if _, err := c.Client(); err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	if got := c.NegotiatedVersion(); got != 42 {
+		t.Fatalf("NegotiatedVersion after reattach = %d; want 42", got)
+	}
+
+	c.Kill()
 }
 
 func TestClient_reattachNoProtocol(t *testing.T) {

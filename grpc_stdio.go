@@ -131,6 +131,14 @@ func (c *grpcStdioClient) Run(stdout, stderr io.Writer) {
 		return
 	}
 
+	// Recover so that a panic in the host-provided stdout/stderr writer
+	// cannot crash the host process.
+	defer func() {
+		if r := recover(); r != nil {
+			c.log.Error("panic in plugin stdio writer (recovered)", "panic", r)
+		}
+	}()
+
 	for {
 		c.log.Trace("waiting for stdio data")
 		data, err := c.stdioClient.Recv()

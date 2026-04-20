@@ -491,7 +491,7 @@ func (b *GRPCBroker) knock(id uint32) error {
 			return fmt.Errorf("failed to knock for id %d: %s", id, msg.Knock.Error)
 		}
 	case <-time.After(BrokerTimeout):
-		return fmt.Errorf("timeout waiting for multiplexing knock handshake on id %d", id)
+		return fmt.Errorf("%w: multiplexing knock handshake on id %d", ErrBrokerTimeout, id)
 	}
 
 	return nil
@@ -535,7 +535,7 @@ func (b *GRPCBroker) DialWithOptions(id uint32, opts ...grpc.DialOption) (conn *
 	case c = <-p.ch:
 		close(p.doneCh)
 	case <-time.After(BrokerTimeout):
-		return nil, errors.New("timeout waiting for connection info")
+		return nil, fmt.Errorf("%w: waiting for connection info on id %d", ErrBrokerTimeout, id)
 	}
 
 	network, address := c.Network, c.Address
