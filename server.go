@@ -303,6 +303,22 @@ func Serve(opts *ServeConfig) {
 
 	var serverCert string
 	clientCert := os.Getenv("PLUGIN_CLIENT_CERT")
+
+	// Reject mixing: if the host has enabled AutoMTLS (PLUGIN_CLIENT_CERT
+	// is populated) while this plugin is configured with a TLSProvider,
+	// the two paths are incompatible. AutoMTLS expects the server to echo
+	// a matching server cert in the handshake so the client can trust it;
+	// with a TLSProvider that echo never happens, and the TLS handshake
+	// fails late at first RPC with a generic certificate-verification
+	// error. Fail fast with a clear message instead.
+	if tlsConfig != nil && clientCert != "" {
+		const msg = "plugin is configured with TLSProvider but the host requested AutoMTLS (PLUGIN_CLIENT_CERT); these are incompatible"
+		logger.Error(msg)
+		fmt.Fprintln(os.Stderr, "go-plugin: "+msg)
+		exitCode = 1
+		return
+	}
+
 	// If the client is configured using AutoMTLS, the certificate will be here,
 	// and we need to generate our own in response.
 	if tlsConfig == nil && clientCert != "" {

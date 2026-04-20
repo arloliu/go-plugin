@@ -1485,29 +1485,22 @@ func TestClient_mtlsClient(t *testing.T) {
 	}
 }
 
-// TestClient_autoMTLSVsTLSProviderFails verifies that a client with
-// AutoMTLS=true cannot transparently talk to a plugin whose server was
-// configured with a TLSProvider: the two paths are incompatible and must
-// fail rather than silently succeed.
+// TestClient_autoMTLSVsTLSProviderFails verifies that a host with
+// AutoMTLS=true cannot talk to a plugin configured with TLSProvider:
+// the server rejects the combination at handshake time and writes a
+// specific error to its stderr so the host sees what went wrong.
 //
-// Why this matters: AutoMTLS has the client send its generated cert via
+// Why this matters: AutoMTLS has the host send its generated cert via
 // PLUGIN_CLIENT_CERT and expects the server to echo a matching server
-// cert in the handshake. When TLSProvider is set, server.go skips the
-// AutoMTLS branch (tlsConfig is already non-nil) and never sends the
-// server cert. The client's TLSConfig has no RootCAs that trust the
-// TLSProvider cert, so the TLS handshake at first RPC fails. Without
-// this test, a future refactor that made the client tolerant of the
-// missing server cert would silently allow the handshake to complete
-// with a server the client never authenticated.
-//
-// This test pins down the current failure mode. The failure surfaces
-// late — Client() and Dispense() both succeed; the error only appears
-// when the connection is actually exercised (Ping here). A possible
-// follow-up is to fail earlier at the server with a clear error; until
-// then, this test documents that the combination does fail somewhere.
+// cert in the handshake. When TLSProvider is set, server.go skipped the
+// AutoMTLS branch (tlsConfig was already non-nil) and never echoed the
+// server cert. The TLS handshake then failed late, at first RPC, with
+// a generic certificate-verification error. The server now detects the
+// mismatch up front and exits with a clear message.
 func TestClient_autoMTLSVsTLSProviderFails(t *testing.T) {
 	t.Parallel()
 
+	var stderr bytes.Buffer
 	process := helperProcess("test-grpc-tls")
 	c := NewClient(&ClientConfig{
 		AutoMTLS:         true,
@@ -1515,27 +1508,17 @@ func TestClient_autoMTLSVsTLSProviderFails(t *testing.T) {
 		HandshakeConfig:  testHandshake,
 		Plugins:          testGRPCPluginMap,
 		AllowedProtocols: []Protocol{ProtocolGRPC},
+		Stderr:           &stderr,
 	})
 	defer c.Kill()
 
-	cp, err := c.Client()
-	if err != nil {
-		// Early failure would be ideal; accept it if that ever lands.
-		return
+	if _, err := c.Client(); err == nil {
+		t.Fatal("expected Client() to fail: AutoMTLS host vs TLSProvider plugin must not silently succeed")
 	}
 
-	gc, ok := cp.(*GRPCClient)
-	if !ok {
-		t.Fatalf("expected *GRPCClient, got %T", cp)
-	}
-
-	pingErr := gc.Ping()
-	if pingErr == nil {
-		t.Fatal("expected Ping to fail: AutoMTLS client vs TLSProvider server must not silently succeed")
-	}
-	if !strings.Contains(pingErr.Error(), "tls") &&
-		!strings.Contains(pingErr.Error(), "certificate") {
-		t.Fatalf("expected a TLS-related error, got: %v", pingErr)
+	const want = "TLSProvider but the host requested AutoMTLS"
+	if !strings.Contains(stderr.String(), want) {
+		t.Fatalf("plugin stderr missing incompatibility message %q; got:\n%s", want, stderr.String())
 	}
 }
 

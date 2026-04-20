@@ -268,7 +268,10 @@ type ClientConfig struct {
 	//
 	// The client should not set TLSConfig, nor should the server set a
 	// TLSProvider, because AutoMTLS implies that a new certificate and tls
-	// configuration will be generated at startup.
+	// configuration will be generated at startup. If the server is
+	// configured with a TLSProvider while the client requests AutoMTLS,
+	// the plugin will refuse to start and exit with an explanatory
+	// message on stderr.
 	//
 	// You cannot Reattach to a server with this option enabled.
 	AutoMTLS bool

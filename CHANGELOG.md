@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `client`: `Client.Kill` is now documented and guaranteed safe under
   concurrent callers; the shutdown body runs at most once even when many
   goroutines race.
+- `server`: `Serve` now refuses to start and exits with a specific error
+  on stderr if the plugin is configured with a `TLSProvider` while the
+  host has requested AutoMTLS (`PLUGIN_CLIENT_CERT` is set). Previously
+  the two combined silently and then failed late at first RPC with a
+  generic TLS certificate-verification error.
 
 ### Fixed
 
