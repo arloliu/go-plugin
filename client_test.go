@@ -1485,6 +1485,60 @@ func TestClient_mtlsClient(t *testing.T) {
 	}
 }
 
+// TestClient_autoMTLSVsTLSProviderFails verifies that a client with
+// AutoMTLS=true cannot transparently talk to a plugin whose server was
+// configured with a TLSProvider: the two paths are incompatible and must
+// fail rather than silently succeed.
+//
+// Why this matters: AutoMTLS has the client send its generated cert via
+// PLUGIN_CLIENT_CERT and expects the server to echo a matching server
+// cert in the handshake. When TLSProvider is set, server.go skips the
+// AutoMTLS branch (tlsConfig is already non-nil) and never sends the
+// server cert. The client's TLSConfig has no RootCAs that trust the
+// TLSProvider cert, so the TLS handshake at first RPC fails. Without
+// this test, a future refactor that made the client tolerant of the
+// missing server cert would silently allow the handshake to complete
+// with a server the client never authenticated.
+//
+// This test pins down the current failure mode. The failure surfaces
+// late — Client() and Dispense() both succeed; the error only appears
+// when the connection is actually exercised (Ping here). A possible
+// follow-up is to fail earlier at the server with a clear error; until
+// then, this test documents that the combination does fail somewhere.
+func TestClient_autoMTLSVsTLSProviderFails(t *testing.T) {
+	t.Parallel()
+
+	process := helperProcess("test-grpc-tls")
+	c := NewClient(&ClientConfig{
+		AutoMTLS:         true,
+		Cmd:              process,
+		HandshakeConfig:  testHandshake,
+		Plugins:          testGRPCPluginMap,
+		AllowedProtocols: []Protocol{ProtocolGRPC},
+	})
+	defer c.Kill()
+
+	cp, err := c.Client()
+	if err != nil {
+		// Early failure would be ideal; accept it if that ever lands.
+		return
+	}
+
+	gc, ok := cp.(*GRPCClient)
+	if !ok {
+		t.Fatalf("expected *GRPCClient, got %T", cp)
+	}
+
+	pingErr := gc.Ping()
+	if pingErr == nil {
+		t.Fatal("expected Ping to fail: AutoMTLS client vs TLSProvider server must not silently succeed")
+	}
+	if !strings.Contains(pingErr.Error(), "tls") &&
+		!strings.Contains(pingErr.Error(), "certificate") {
+		t.Fatalf("expected a TLS-related error, got: %v", pingErr)
+	}
+}
+
 func TestClient_mtlsNetRPCClient(t *testing.T) {
 	process := helperProcess("test-interface-mtls")
 	c := NewClient(&ClientConfig{
