@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 
 	"github.com/arloliu/go-plugin/internal/grpcmux"
 	"github.com/arloliu/go-plugin/internal/plugin"
@@ -64,6 +65,8 @@ type GRPCServer struct {
 	logger hclog.Logger
 
 	muxer *grpcmux.GRPCServerMuxer
+
+	brokerMu sync.Mutex
 }
 
 // Init implements ServerProtocol.
@@ -117,17 +120,19 @@ func (s *GRPCServer) Init() error {
 // grpc.Broker if present.
 func (s *GRPCServer) Stop() {
 	s.server.Stop()
-
-	if s.broker != nil {
-		_ = s.broker.Close()
-		s.broker = nil
-	}
+	s.closeBroker()
 }
 
 // GracefulStop calls GracefulStop on the underlying grpc.Server and Close on
 // the underlying grpc.Broker if present.
 func (s *GRPCServer) GracefulStop() {
 	s.server.GracefulStop()
+	s.closeBroker()
+}
+
+func (s *GRPCServer) closeBroker() {
+	s.brokerMu.Lock()
+	defer s.brokerMu.Unlock()
 
 	if s.broker != nil {
 		_ = s.broker.Close()

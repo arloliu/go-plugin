@@ -597,19 +597,34 @@ func (b *GRPCBroker) Run() {
 			break
 		}
 
-		// Initialize the waiter
+		// Route by role: a server-side Knock (not an Ack) is a listen
+		// request that stays open across many deliveries; everything else
+		// is a one-shot message bound for a waiting Dial/knock caller.
+		serverKnock := msg.Knock != nil && msg.Knock.Knock && !msg.Knock.Ack
 		var p *gRPCBrokerPending
-		if msg.Knock != nil && msg.Knock.Knock && !msg.Knock.Ack {
+		if serverKnock {
 			p = b.getServerStream(msg.ServiceId)
-			// The server side doesn't close the channel immediately as it needs
-			// to continuously listen for knocks.
+			// The server side doesn't close the channel immediately as it
+			// needs to continuously listen for knocks.
 		} else {
 			p = b.getClientStream(msg.ServiceId)
-			go b.timeoutWait(msg.ServiceId, p)
 		}
 		select {
 		case p.ch <- msg:
+			// timeoutWait owns GC of the client-stream entry after it
+			// is picked up or abandoned; spawn it only once the message
+			// is actually queued so we do not race a prior timeoutWait
+			// that already owns this p. Server-stream entries are kept
+			// for the life of the broker, so no timeoutWait is needed.
+			if !serverKnock {
+				go b.timeoutWait(msg.ServiceId, p)
+			}
 		default:
+			// Pending slot already holds an unread message for this id.
+			// Dropping a ConnInfo or knock silently would produce a hung
+			// Dial on the peer with no diagnostic trail, so log it.
+			libLog().Warn("grpc broker: dropping duplicate message; pending slot full",
+				"service_id", msg.ServiceId, "server_knock", serverKnock)
 		}
 	}
 }

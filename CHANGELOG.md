@@ -33,23 +33,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whose plugins occasionally fail to send.
 - `plugin`: `GRPCBroker.knock` (multiplexing) now reaps its
   `clientStreams` entry on timeout for the same reason.
-- `client`: `Start` now validates `ReattachConfig` up front and returns
-  a clear error when neither `Addr` nor `ReattachFunc` is set, instead
-  of panicking in the default cmdrunner reattach path.
+- `client`: `Start` now validates `ReattachConfig` up front. `Addr` is
+  always required (the client dials it to reconnect), and when
+  `ReattachFunc` is unset `Pid` must also be set — otherwise the default
+  cmdrunner path would reach `os.FindProcess(0)`, which silently succeeds
+  on Unix and can target the caller's process group on `Kill`.
 - `client`: Version-mismatch error now formats the client version list
   with `%v` (e.g. `[1 2]`) instead of `%d`, for clarity.
 - `client`: `Client.Kill` is now gated by `sync.Once` so concurrent callers
   no longer both enter the graceful-shutdown path and double-close the RPC
   client. Previously the lock was released before the shutdown body ran,
   producing spurious "connection is shut down" errors and redundant
-  force-kills under racing callers.
+  force-kills under racing callers. The gate is only engaged once a runner
+  exists, so a `Kill` that races ahead of the first `Start` does not
+  permanently disable later cleanup.
 - `client`: A non-test reattach now adopts `ReattachConfig.ProtocolVersion`
-  as the negotiated version. Previously `NegotiatedVersion()` returned `0`
-  after reattach, which could silently mismatch `VersionedPlugins` after a
-  plugin rebuild.
+  as the negotiated version, and `Client.ReattachConfig()` populates
+  `ProtocolVersion` from the negotiated value so the round-trip (start →
+  `ReattachConfig()` → `NewClient(Reattach: ...)`) preserves it.
+  Previously `NegotiatedVersion()` returned `0` after reattach, which
+  could silently mismatch `VersionedPlugins` after a plugin rebuild.
+- `client`: Reattach now installs the negotiated version's plugin set
+  into `config.Plugins`, mirroring the normal `Start` path. Without this,
+  a reattach client configured with `VersionedPlugins` only (no `Plugins`
+  field) captured an empty plugin map in the protocol client and
+  `Dispense` failed with "unknown plugin type".
 - `plugin`: Panics in host-provided `SyncStdout` / `SyncStderr` writers are
   now recovered in the gRPC stdio forwarder goroutine instead of taking
   down the host process.
+- `plugin`: `MuxBroker.Run` now closes the extra yamux stream when a
+  duplicate id arrives with its pending slot already full, where before
+  the stream was silently abandoned until session teardown.
+- `plugin`: `MuxBroker.Run` and `GRPCBroker.Run` now spawn `timeoutWait`
+  only when the pending message was actually queued, avoiding redundant
+  cleanup goroutines racing over the same pending entry on duplicate-id
+  bursts. Overflow drops now emit a `Warn` log line with the service id
+  so operators can correlate the event to plugin-protocol anomalies
+  instead of diagnosing a silently hung `Dial`/`Accept`.
+- `plugin`: `MuxBroker.timeoutWait` no longer blocks forever in its
+  cleanup branch when the pending stream was already drained by the
+  racing `Accept`. A `default` guards the inner channel receive.
+- `server`: `GRPCServer.Stop` and `GRPCServer.GracefulStop` now serialize
+  broker close through an internal mutex. The controller's `Shutdown`
+  handler can invoke both concurrently when the graceful drain exceeds
+  its budget; previously both paths could double-close the broker and
+  race on the `s.broker = nil` assignment.
 
 ## [1.8.0] - 2026-04-19
 

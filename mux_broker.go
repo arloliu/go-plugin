@@ -157,11 +157,22 @@ func (m *MuxBroker) Run() {
 		p := m.getStream(id)
 		select {
 		case p.ch <- stream:
+			// timeoutWait owns GC of the pending entry after it is
+			// picked up or abandoned; spawn it only once the stream
+			// is queued so we do not race a prior timeoutWait that
+			// already owns this p.
+			go m.timeoutWait(id, p)
 		default:
+			// Pending slot already holds an unqueued stream for this id.
+			// Dropping silently would leave a yamux stream open and leave
+			// operators with no signal to correlate against the plugin
+			// protocol anomaly that produced the duplicate. Log first so
+			// the warn is flushed before the peer observes the close —
+			// without that ordering, assertions that wait for Close to
+			// propagate would race ahead of the log emission.
+			libLog().Warn("mux broker: dropped duplicate stream; pending slot full", "id", id)
+			_ = stream.Close()
 		}
-
-		// Wait for a timeout
-		go m.timeoutWait(id, p)
 	}
 }
 
@@ -200,7 +211,10 @@ func (m *MuxBroker) timeoutWait(id uint32, p *muxBrokerPending) {
 	// If we timed out, then check if we have a channel in the buffer,
 	// and if so, close it.
 	if timeout {
-		s := <-p.ch
-		_ = s.Close()
+		select {
+		case s := <-p.ch:
+			_ = s.Close()
+		default:
+		}
 	}
 }

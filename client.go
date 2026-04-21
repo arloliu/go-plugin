@@ -357,7 +357,11 @@ type ReattachConfig struct {
 
 	// ReattachFunc allows consumers to provide their own implementation of
 	// runner.AttachedRunner and attach to something other than a plain process.
-	// At least one of Pid or ReattachFunc must be set.
+	//
+	// Addr is always required (the client dials it to reconnect). If
+	// ReattachFunc is nil, Pid must also be set so the default cmdrunner
+	// reattach path can locate the process; otherwise ReattachFunc
+	// supplies the AttachedRunner and Pid is ignored.
 	ReattachFunc runner.ReattachFunc
 
 	// Test is set to true if this is reattaching to a plugin in "test mode"
@@ -565,13 +569,26 @@ func (c *Client) killed() bool {
 // multiple goroutines. Subsequent calls are no-ops; concurrent callers block
 // on the first call and then return.
 func (c *Client) Kill() {
+	// Snapshot the runner under the lock. If there is nothing to kill yet
+	// (Kill raced ahead of the first Start), skip killOnce entirely so a
+	// later Start → Kill still runs cleanup. Consuming the once here would
+	// permanently disable Kill for this client and orphan the subprocess
+	// if Start subsequently succeeded.
+	c.l.Lock()
+	runner := c.runner
+	c.l.Unlock()
+	if runner == nil {
+		return
+	}
 	c.killOnce.Do(c.kill)
 }
 
 func (c *Client) kill() {
 	c.killBodyRuns.Add(1)
 
-	// Grab a lock to read some private fields.
+	// Grab a lock to read some private fields. Kill() has already verified
+	// runner != nil at the gate; this read owns its own snapshot under the
+	// lock to stay correct if that invariant ever weakens.
 	c.l.Lock()
 	runner := c.runner
 	addr := c.address
@@ -699,13 +716,20 @@ func (c *Client) Start() (addr net.Addr, err error) {
 		}
 
 		// Fail fast on a ReattachConfig that cannot actually attach to
-		// anything. The default cmdrunner.ReattachFunc needs Addr; a
-		// custom ReattachFunc can source its own address, so either is
-		// sufficient.
-		if c.config.Reattach != nil &&
-			c.config.Reattach.Addr == nil &&
-			c.config.Reattach.ReattachFunc == nil {
-			return nil, errors.New("ReattachConfig requires one of Addr or ReattachFunc to be set")
+		// anything. Addr is always required because the client dials it
+		// to reconnect to the plugin after reattach; ReattachFunc only
+		// supplies the AttachedRunner and cannot return an address.
+		// When ReattachFunc is nil, the default cmdrunner reattach path
+		// additionally needs Pid; otherwise it would os.FindProcess(0),
+		// which silently succeeds on Unix and can target the caller's
+		// process group on Kill.
+		if c.config.Reattach != nil {
+			if c.config.Reattach.Addr == nil {
+				return nil, errors.New("ReattachConfig.Addr is required")
+			}
+			if c.config.Reattach.ReattachFunc == nil && c.config.Reattach.Pid == 0 {
+				return nil, errors.New("ReattachConfig requires Pid or ReattachFunc")
+			}
 		}
 	}
 
@@ -1119,6 +1143,22 @@ func (c *Client) reattach() (net.Addr, error) {
 	// plugin that was built against a later version.
 	c.negotiatedVersion = c.config.Reattach.ProtocolVersion
 
+	// Mirror the normal Start path: the protocol client (gRPC and net/rpc)
+	// captures whatever is currently in c.config.Plugins at construction
+	// time. For a client that only registered VersionedPlugins, c.config.Plugins
+	// is nil after reattach until we resolve it from the negotiated version.
+	// Without this, Dispense on a VersionedPlugins-only reattach would
+	// fail with "unknown plugin type" even though NegotiatedVersion matches.
+	if c.config.VersionedPlugins == nil {
+		c.config.VersionedPlugins = make(map[int]PluginSet)
+	}
+	if _, ok := c.config.VersionedPlugins[c.negotiatedVersion]; !ok && c.config.Plugins != nil {
+		c.config.VersionedPlugins[c.negotiatedVersion] = c.config.Plugins
+	}
+	if plugins, ok := c.config.VersionedPlugins[c.negotiatedVersion]; ok {
+		c.config.Plugins = plugins
+	}
+
 	// In test mode we do NOT set the runner. This avoids the runner being
 	// killed (the only purpose we have for setting c.runner when reattaching),
 	// since in test mode the process is responsible for exiting on its own.
@@ -1183,8 +1223,9 @@ func (c *Client) ReattachConfig() *ReattachConfig {
 	}
 
 	reattach := &ReattachConfig{
-		Protocol: c.protocol,
-		Addr:     c.address,
+		Protocol:        c.protocol,
+		ProtocolVersion: c.negotiatedVersion,
+		Addr:            c.address,
 	}
 
 	if c.config.Cmd != nil && c.config.Cmd.Process != nil {

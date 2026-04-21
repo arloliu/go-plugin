@@ -792,26 +792,199 @@ func TestClient_reattachNotFound(t *testing.T) {
 	}
 }
 
-// TestClient_reattachEmptyInvalid verifies Start fails fast with a clear
-// error when ReattachConfig has neither Addr nor ReattachFunc set. Prior
-// to this guard the zero-value config took the default cmdrunner path
-// and eventually failed deep inside net.Dial.
-func TestClient_reattachEmptyInvalid(t *testing.T) {
+// TestClient_reattachInvalid verifies Start fails fast with a clear error
+// on ReattachConfig shapes that cannot produce a working client. Prior to
+// these guards, an Addr-missing config reached a nil-pointer dial and a
+// Pid-missing default reattach reached os.FindProcess(0), which silently
+// succeeds on Unix and can target the caller's process group on Kill.
+func TestClient_reattachInvalid(t *testing.T) {
 	t.Parallel()
 
+	dummyAddr := &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 1}
+
+	cases := []struct {
+		name     string
+		reattach *ReattachConfig
+		want     string
+	}{
+		{
+			name:     "empty",
+			reattach: &ReattachConfig{},
+			want:     "ReattachConfig.Addr is required",
+		},
+		{
+			name:     "pid only, no addr",
+			reattach: &ReattachConfig{Pid: 99999},
+			want:     "ReattachConfig.Addr is required",
+		},
+		{
+			name:     "reattach-func only, no addr",
+			reattach: &ReattachConfig{ReattachFunc: func() (runner.AttachedRunner, error) { return nil, nil }},
+			want:     "ReattachConfig.Addr is required",
+		},
+		{
+			name:     "addr only, no pid and no reattach-func",
+			reattach: &ReattachConfig{Addr: dummyAddr},
+			want:     "ReattachConfig requires Pid or ReattachFunc",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c := NewClient(&ClientConfig{
+				Reattach:        tc.reattach,
+				HandshakeConfig: testHandshake,
+				Plugins:         testPluginMap,
+			})
+			defer c.Kill()
+
+			_, err := c.Start()
+			if err == nil {
+				t.Fatalf("expected Start to fail on %s", tc.name)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected error containing %q, got: %v", tc.want, err)
+			}
+		})
+	}
+}
+
+// TestClient_reattachConfigRoundTrip verifies the negotiated protocol
+// version survives ReattachConfig() → NewClient(Reattach:...). Prior to
+// the fix ReattachConfig() only populated Protocol, Addr, and Pid, so the
+// reattached client silently fell back to version 0 and could mismatch
+// VersionedPlugins after a plugin rebuild.
+func TestClient_reattachConfigRoundTrip(t *testing.T) {
+	process := helperProcess("test-interface")
 	c := NewClient(&ClientConfig{
-		Reattach:        &ReattachConfig{},
+		Cmd:             process,
 		HandshakeConfig: testHandshake,
 		Plugins:         testPluginMap,
 	})
 	defer c.Kill()
 
-	_, err := c.Start()
-	if err == nil {
-		t.Fatal("expected Start to fail on empty ReattachConfig")
+	if _, err := c.Client(); err != nil {
+		t.Fatalf("err: %s", err)
 	}
-	if !strings.Contains(err.Error(), "Addr or ReattachFunc") {
-		t.Fatalf("expected error about missing Addr/ReattachFunc, got: %v", err)
+
+	want := c.NegotiatedVersion()
+	reattach := c.ReattachConfig()
+	if reattach == nil {
+		t.Fatal("ReattachConfig returned nil")
+	}
+	if reattach.ProtocolVersion != want {
+		t.Fatalf("ReattachConfig.ProtocolVersion = %d; want %d", reattach.ProtocolVersion, want)
+	}
+
+	c2 := NewClient(&ClientConfig{
+		Reattach:        reattach,
+		HandshakeConfig: testHandshake,
+		Plugins:         testPluginMap,
+	})
+	defer c2.Kill()
+
+	if _, err := c2.Client(); err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	if got := c2.NegotiatedVersion(); got != want {
+		t.Fatalf("reattached NegotiatedVersion = %d; want %d", got, want)
+	}
+}
+
+// TestClient_reattachVersionedPlugins verifies that a reattach client
+// configured with VersionedPlugins only (no Plugins field) can Dispense
+// plugins after reattach. Prior to the fix, reattach set
+// c.negotiatedVersion but did not install the version-specific plugin
+// set into c.config.Plugins, so the protocol client captured an empty
+// map at construction and Dispense failed with "unknown plugin type".
+func TestClient_reattachVersionedPlugins(t *testing.T) {
+	process := helperProcess("test-versioned-plugins")
+	c := NewClient(&ClientConfig{
+		Cmd:             process,
+		HandshakeConfig: testVersionedHandshake,
+		VersionedPlugins: map[int]PluginSet{
+			2: testGRPCPluginMap,
+		},
+		AllowedProtocols: []Protocol{ProtocolGRPC},
+	})
+	defer c.Kill()
+
+	if _, err := c.Client(); err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	if c.NegotiatedVersion() != 2 {
+		t.Fatalf("primary NegotiatedVersion = %d; want 2", c.NegotiatedVersion())
+	}
+
+	reattach := c.ReattachConfig()
+	if reattach == nil {
+		t.Fatal("ReattachConfig returned nil")
+	}
+	if reattach.ProtocolVersion != 2 {
+		t.Fatalf("ReattachConfig.ProtocolVersion = %d; want 2", reattach.ProtocolVersion)
+	}
+
+	// Reattach using VersionedPlugins only (no Plugins field). This
+	// is the shape that exposes the bug: Plugins is nil until reattach
+	// installs the version-specific set.
+	c2 := NewClient(&ClientConfig{
+		Reattach:        reattach,
+		HandshakeConfig: testVersionedHandshake,
+		VersionedPlugins: map[int]PluginSet{
+			2: testGRPCPluginMap,
+		},
+		AllowedProtocols: []Protocol{ProtocolGRPC},
+	})
+	defer c2.Kill()
+
+	client, err := c2.Client()
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	raw, err := client.Dispense("test")
+	if err != nil {
+		t.Fatalf("Dispense after reattach failed: %s", err)
+	}
+	if _, ok := raw.(testInterface); !ok {
+		t.Fatalf("unexpected dispensed type: %T", raw)
+	}
+}
+
+// TestClient_killBeforeStart verifies that calling Kill on a fresh client
+// before Start does not permanently disable Kill. Prior to the fix the
+// sync.Once gate was consumed by the no-op first Kill, so any subsequent
+// Kill after Start succeeded became a silent no-op, orphaning the
+// subprocess.
+func TestClient_killBeforeStart(t *testing.T) {
+	t.Parallel()
+
+	process := helperProcess("test-interface")
+	c := NewClient(&ClientConfig{
+		Cmd:             process,
+		HandshakeConfig: testHandshake,
+		Plugins:         testPluginMap,
+	})
+
+	// Kill on a brand-new client must not consume the once-gate.
+	c.Kill()
+	if got := c.killBodyRuns.Load(); got != 0 {
+		t.Fatalf("Kill body ran %d times before Start; want 0", got)
+	}
+
+	if _, err := c.Client(); err != nil {
+		c.Kill()
+		t.Fatalf("err: %s", err)
+	}
+
+	c.Kill()
+	if !c.Exited() {
+		t.Fatal("client should have exited after Kill")
+	}
+	if got := c.killBodyRuns.Load(); got != 1 {
+		t.Fatalf("Kill body ran %d times after Start+Kill; want 1", got)
 	}
 }
 
