@@ -31,9 +31,6 @@ func dialGRPCConn(tls *tls.Config, dialer func(context.Context, string) (net.Con
 	// We use a custom dialer so that we can connect over unix domain sockets.
 	opts = append(opts, grpc.WithContextDialer(dialer))
 
-	// Fail right away
-	opts = append(opts, grpc.FailOnNonTempDialError(true))
-
 	// If we have no TLS configuration set, we need to explicitly tell grpc
 	// that we're connecting with an insecure connection.
 	if tls == nil {
@@ -50,12 +47,22 @@ func dialGRPCConn(tls *tls.Config, dialer func(context.Context, string) (net.Con
 	// Add our custom options if we have any
 	opts = append(opts, dialOpts...)
 
-	// Connect. Note the first parameter is unused because we use a custom
-	// dialer that has the state to see the address.
-	conn, err := grpc.Dial("unused", opts...)
+	// Connect. The target string is ignored because we use a custom dialer
+	// (WithContextDialer) that holds the real address. Use the passthrough
+	// scheme so grpc.NewClient does not try to resolve "unused" via DNS.
+	conn, err := grpc.NewClient("passthrough:///unused", opts...)
 	if err != nil {
 		return nil, err
 	}
+
+	// NewClient is strictly lazy: no dial happens until the first RPC. The
+	// previous grpc.Dial (without WithBlock) returned immediately but kicked
+	// off a background dial, so transport errors surfaced via the conn state
+	// machine promptly and the first RPC did not pay the dial cost. Force
+	// the same eager-background-dial behavior with Connect() — it is
+	// idempotent and non-blocking, and preserves error-surfacing timing for
+	// callers that rely on it (health pings, Close paths, etc.).
+	conn.Connect()
 
 	return conn, nil
 }

@@ -130,6 +130,41 @@ directory as well as throughout our various open source projects.
 
 For complete API documentation, see [GoDoc](https://godoc.org/github.com/arloliu/go-plugin).
 
+## Performance tuning (gRPC plugins)
+
+go-plugin itself contributes negligible per-RPC overhead once the plugin is
+running: its internal protos (`ConnInfo`, `StdioData`, `Empty`) only carry
+broker-setup and stdio traffic. Throughput of a gRPC plugin is dominated by
+the user's own protobuf messages and the underlying gRPC transport.
+
+If you need to tune that path:
+
+- **Upgrade gRPC.** Keep `google.golang.org/grpc` current — transport-layer
+  improvements (buffer pooling, flow control, allocation reduction) land in
+  every minor release and benefit your RPCs directly.
+
+- **Consider [vtprotobuf](https://github.com/planetscale/vtprotobuf) for your
+  own protos.** It generates `MarshalVT` / `UnmarshalVT` methods that bypass
+  protobuf reflection, typically 2–3× faster encode/decode with fewer
+  allocations. To adopt it for a plugin's RPCs, regenerate your protos with
+  `protoc-gen-go-vtproto` and register the codec on both host and plugin:
+
+  ```go
+  import (
+      "google.golang.org/grpc/encoding"
+      _ "google.golang.org/grpc/encoding/proto"
+      // vtprotobuf codec — see vtprotobuf docs for the import path matching
+      // your generator configuration.
+  )
+  ```
+
+  go-plugin's own internal messages will continue to use the default proto
+  codec, so registering an alternate codec does not affect handshake, broker,
+  or stdio traffic.
+
+- **Profile, then tune.** The biggest wins are almost always in your plugin's
+  own code paths, not in go-plugin's glue.
+
 ## Roadmap
 
 Our plugin system is constantly evolving. As we use the plugin system for

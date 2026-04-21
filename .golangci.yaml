@@ -76,9 +76,6 @@ linters:
     staticcheck:
       checks:
         - "all"
-        # SA1019 is intentionally enabled; grpc.Dial is not deprecated at the
-        # current pinned grpc-go version. Remove this comment when it starts
-        # firing and do the grpc.NewClient migration.
 
   exclusions:
     rules:

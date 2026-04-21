@@ -47,9 +47,8 @@ func startHangingGRPCServer(t *testing.T) (*grpc.ClientConn, func()) {
 		_ = srv.Serve(lis)
 	}()
 
-	conn, err := grpc.Dial(lis.Addr().String(),
+	conn, err := grpc.NewClient(lis.Addr().String(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	if err != nil {
 		srv.Stop()

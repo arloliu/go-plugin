@@ -18,9 +18,9 @@ import (
 	"time"
 
 	grpctest "github.com/arloliu/go-plugin/test/grpc"
-	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/hashicorp/go-hclog"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // Test that NetRPCUnsupportedPlugin implements the correct interfaces.
@@ -285,14 +285,14 @@ func (s *testGRPCServer) Bidirectional(ctx context.Context, req *grpctest.Bidire
 func (s *testGRPCServer) PrintStdio(
 	ctx context.Context,
 	req *grpctest.PrintStdioRequest,
-) (*empty.Empty, error) {
+) (*emptypb.Empty, error) {
 	s.Impl.PrintStdio(req.Stdout, req.Stderr)
-	return &empty.Empty{}, nil
+	return &emptypb.Empty{}, nil
 }
 
-func (s *testGRPCServer) Panic(ctx context.Context, req *grpctest.PanicRequest) (*empty.Empty, error) {
+func (s *testGRPCServer) Panic(ctx context.Context, req *grpctest.PanicRequest) (*emptypb.Empty, error) {
 	err := s.Impl.Panic(req.Message)
-	return &empty.Empty{}, err
+	return &emptypb.Empty{}, err
 }
 
 type pingPongServer struct {

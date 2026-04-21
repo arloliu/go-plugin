@@ -7,11 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-04-21
+
 ### Added
 
 - `plugin`: New exported `ErrBrokerTimeout` sentinel. Broker accept, dial,
   and knock timeouts now wrap it via `%w`, so callers can distinguish a
   broker timeout from other transport errors via `errors.Is`.
+- `docs`: New "Performance tuning (gRPC plugins)" section in `README.md`
+  pointing plugin authors at upstream gRPC upgrades and
+  [`vtprotobuf`](https://github.com/planetscale/vtprotobuf) +
+  `encoding.RegisterCodec` for their own protos. go-plugin's internal
+  protos remain on the default codec, so a custom codec registered by a
+  plugin author does not interfere with handshake, broker, or stdio
+  traffic.
 
 ### Changed
 
@@ -23,6 +32,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   host has requested AutoMTLS (`PLUGIN_CLIENT_CERT` is set). Previously
   the two combined silently and then failed late at first RPC with a
   generic TLS certificate-verification error.
+- `deps`: bump `google.golang.org/grpc` v1.61.0 → v1.80.0 and
+  `google.golang.org/protobuf` v1.36.6 → v1.36.11. Internal `.pb.go`
+  sources regenerated with `protoc-gen-go` v1.36.11 and
+  `protoc-gen-go-grpc` v1.6.1, dropping the legacy `UnsafeEnabled` dual
+  path.
+- `deps`: dropped direct dependency on the deprecated
+  `github.com/golang/protobuf` module. `grpc_stdio.go` now uses
+  `google.golang.org/protobuf/types/known/emptypb.Empty` directly.
+- `plugin`: internal gRPC dialing migrated from deprecated `grpc.Dial`
+  to `grpc.NewClient`. `grpc.FailOnNonTempDialError` (a no-op without
+  `WithBlock`) is removed. An idempotent `conn.Connect()` is issued
+  after construction so the transport begins dialing in the background
+  immediately, preserving the error-surfacing timing of the previous
+  code and keeping the first RPC off the dial path. The passthrough
+  resolver scheme is used for the `"unused"` target to avoid DNS
+  lookups under a custom `WithContextDialer`.
+- `testing`: `TestGRPCConn` now explicitly waits for the underlying
+  `grpc.ClientConn` to reach `connectivity.Ready` (bounded by a 5s
+  timeout) before returning. This preserves the prior contract that the
+  listener can be closed immediately once the helper returns, which
+  was broken by the lazy-dial semantics of `grpc.NewClient`. Callers
+  that previously relied on `WithBlock`'s blocking dial behaviour see
+  equivalent semantics.
 
 ### Fixed
 

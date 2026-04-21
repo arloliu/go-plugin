@@ -57,9 +57,8 @@ func TestGRPCClient_Close_BoundedByPingTimeout(t *testing.T) {
 	srvDone := make(chan struct{})
 	go func() { defer close(srvDone); _ = srv.Serve(lis) }()
 
-	conn, err := grpc.Dial(lis.Addr().String(),
+	conn, err := grpc.NewClient(lis.Addr().String(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	if err != nil {
 		srv.Stop()

@@ -10,10 +10,12 @@ import (
 	"net"
 	"net/rpc"
 	"testing"
+	"time"
 
 	"github.com/arloliu/go-plugin/internal/grpcmux"
 	hclog "github.com/hashicorp/go-hclog"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -123,14 +125,32 @@ func TestGRPCConn(tb testing.TB, register func(*grpc.Server)) (*grpc.ClientConn,
 	register(server)
 	go func() { _ = server.Serve(l) }()
 
-	// Connect to the server
-	conn, err := grpc.Dial(
+	// Connect to the server. NewClient is lazy, so we trigger the dial
+	// explicitly with Connect() and wait for the transport to reach Ready
+	// before returning. This preserves the prior TestGRPCConn contract that
+	// the listener can be closed immediately after the helper returns — any
+	// subsequent calls use the already-established HTTP/2 connection.
+	conn, err := grpc.NewClient(
 		l.Addr().String(),
-		grpc.WithBlock(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
 		tb.Fatalf("err: %s", err)
+	}
+	conn.Connect()
+
+	waitCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for {
+		state := conn.GetState()
+		if state == connectivity.Ready {
+			break
+		}
+		if !conn.WaitForStateChange(waitCtx, state) {
+			_ = conn.Close()
+			_ = l.Close()
+			tb.Fatalf("grpc connection did not reach Ready: last state %s, err %v", state, waitCtx.Err())
+		}
 	}
 
 	// Connection successful, close the listener
